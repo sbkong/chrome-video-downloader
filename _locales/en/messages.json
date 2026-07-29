@@ -1,0 +1,12 @@
+{
+  "appName": { "message": "Video Downloader" },
+  "appDesc": { "message": "Download videos with Ctrl+Alt+Click." },
+  "actionTitle": { "message": "Video Downloader settings" },
+  "popupHeading": { "message": "Video Downloader Settings" },
+  "subfolderLabel": { "message": "Subfolder name" },
+  "subfolderPlaceholder": { "message": "Leave empty to save directly in the downloads folder" },
+  "subfolderHint": { "message": "Creates a subfolder with this name inside the <code>downloads</code> folder.<br>Leave empty to save without a subfolder.<br><code>{domain}</code> = site domain folder, <code>{title}</code> = page title folder.<br>Combine / nest allowed (e.g. <code>{domain}/{title}</code>)." },
+  "saveButton": { "message": "Save" },
+  "savedStatus": { "message": "Saved" },
+  "usage": { "message": "How to use: Ctrl + Alt + Click on a video" }
+}

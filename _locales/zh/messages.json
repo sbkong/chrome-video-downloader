@@ -1,0 +1,12 @@
+{
+  "appName": { "message": "视频下载器" },
+  "appDesc": { "message": "使用 Ctrl+Alt+点击 下载视频。" },
+  "actionTitle": { "message": "视频下载器设置" },
+  "popupHeading": { "message": "视频下载器设置" },
+  "subfolderLabel": { "message": "子文件夹名称" },
+  "subfolderPlaceholder": { "message": "留空则直接保存到 downloads 文件夹" },
+  "subfolderHint": { "message": "在 <code>downloads</code> 文件夹内创建指定名称的子文件夹。<br>留空则不创建子文件夹。<br><code>{domain}</code> = 网站域名文件夹，<code>{title}</code> = 页面标题文件夹。<br>可组合 / 嵌套（例如 <code>{domain}/{title}</code>）。" },
+  "saveButton": { "message": "保存" },
+  "savedStatus": { "message": "已保存" },
+  "usage": { "message": "用法：在视频上 Ctrl + Alt + 点击" }
+}

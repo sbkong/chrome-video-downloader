@@ -1,0 +1,12 @@
+{
+  "appName": { "message": "동영상 다운로더" },
+  "appDesc": { "message": "Ctrl+Alt+클릭으로 동영상을 다운로드합니다." },
+  "actionTitle": { "message": "동영상 다운로더 설정" },
+  "popupHeading": { "message": "동영상 다운로더 설정" },
+  "subfolderLabel": { "message": "서브 폴더 이름" },
+  "subfolderPlaceholder": { "message": "비워두면 downloads 폴더에 바로 저장" },
+  "subfolderHint": { "message": "<code>downloads</code> 폴더 안에 지정한 이름의 서브 폴더를 만들어 저장합니다.<br>비워두면 서브 폴더 없이 저장됩니다.<br><code>{domain}</code> = 도메인명 폴더, <code>{title}</code> = 페이지 제목 폴더.<br>조합·중첩 가능 (예: <code>{domain}/{title}</code>)." },
+  "saveButton": { "message": "저장" },
+  "savedStatus": { "message": "저장되었습니다" },
+  "usage": { "message": "사용법: 동영상 위에서 Ctrl + Alt + 클릭" }
+}
