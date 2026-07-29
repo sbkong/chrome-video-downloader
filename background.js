@@ -1,20 +1,32 @@
 const RULE_ID = 23456;
 
-// Intended path per download URL. onDeterminingFilename fires for EVERY download in
-// the browser (including ones from other extensions), so we only name downloads we
-// actually started — matched by URL — and decline all others. Otherwise two
-// extensions fight over the same file's name.
-const pendingByUrl = new Map();
+// Intended filenames for the downloads we start, in order.
+const pendingPaths = [];
 
-chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
-  const path = pendingByUrl.get(item.url);
+// Register onDeterminingFilename ONLY while we have a download in flight, and remove
+// it as soon as our queue drains. onDeterminingFilename is global (it fires for every
+// download in the browser), so a permanently-registered listener from each extension
+// makes Chrome's multi-listener conflict resolution drop filenames. Keeping the
+// listener registered only while we are actively downloading means an idle extension
+// never interferes with the companion Image Downloader's downloads (or anything else).
+function determineFilename(item, suggest) {
+  const path = pendingPaths.shift();
   if (path) {
-    pendingByUrl.delete(item.url);
     suggest({ filename: path, conflictAction: 'uniquify' });
   } else {
     suggest();
   }
-});
+  if (pendingPaths.length === 0) {
+    chrome.downloads.onDeterminingFilename.removeListener(determineFilename);
+  }
+}
+
+function enqueue(path) {
+  pendingPaths.push(path);
+  if (!chrome.downloads.onDeterminingFilename.hasListener(determineFilename)) {
+    chrome.downloads.onDeterminingFilename.addListener(determineFilename);
+  }
+}
 
 chrome.runtime.onMessage.addListener((request, sender) => {
   if (request.action === 'downloadVideo') {
@@ -59,7 +71,7 @@ async function handleDownload(videoUrl, referer, title) {
     const blob = await response.blob();
     const dataUrl = await blobToDataUrl(blob);
     const path = buildPath(subfolder, getFilename(videoUrl));
-    pendingByUrl.set(dataUrl, path);
+    enqueue(path);
 
     await chrome.downloads.download({
       url: dataUrl,
@@ -78,7 +90,7 @@ async function handleDownload(videoUrl, referer, title) {
     // are not hotlink-protected; a protected one may still fail here).
     try {
       const path = buildPath(subfolder, getFilename(videoUrl));
-      pendingByUrl.set(videoUrl, path);
+      enqueue(path);
       await chrome.downloads.download({
         url: videoUrl,
         filename: path,
