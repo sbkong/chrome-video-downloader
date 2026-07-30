@@ -14,5 +14,14 @@
   "stDownloading": { "message": "Downloading" },
   "stDone": { "message": "Done" },
   "stError": { "message": "Error" },
-  "hostMissingHint": { "message": "The native host does not seem installed. Run native/install.ps1." }
+  "hostMissingHint": { "message": "The native host does not seem installed. Run native/install.ps1." },
+  "videosHeading": { "message": "Detected videos" },
+  "refreshVideos": { "message": "Refresh" },
+  "dlBtn": { "message": "Download" },
+  "openFolderBtn": { "message": "Open folder" },
+  "noVideos": { "message": "No videos found on this tab. Play it and refresh, or use 'This whole page' below." },
+  "pageItem": { "message": "Download all" },
+  "downloadSelected": { "message": "Download selected" },
+  "selectAllTitle": { "message": "Select / clear all" },
+  "streamItem": { "message": "Stream (extract from page)" }
 }

@@ -3,46 +3,65 @@
 <head>
   <meta charset="UTF-8">
   <style>
-    body {
-      width: 320px; margin: 0; padding: 16px;
-      font-family: -apple-system, "Segoe UI", sans-serif; font-size: 13px; color: #222;
-    }
-    h1 { font-size: 14px; margin: 0 0 12px; }
+    body { width: 340px; margin: 0; padding: 16px; font-family: -apple-system, "Segoe UI", sans-serif; font-size: 13px; color: #222; }
+    h1 { font-size: 14px; margin: 0 0 10px; }
+    h2 { font-size: 12px; margin: 0; color: #333; }
+    .row { display: flex; align-items: center; justify-content: space-between; }
+    button { padding: 8px; border: none; border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer; color: #fff; background: #E53935; }
+    button:hover { background: #d32f2f; }
+    button:disabled { background: #bbb; cursor: default; }
+    button.small { padding: 5px 9px; font-size: 11px; white-space: nowrap; }
+    button.done { background: #2e7d32; } button.done:hover { background: #276b2b; }
+    #refresh { background: #666; } #refresh:hover { background: #555; }
+    #list { list-style: none; margin: 8px 0 0; padding: 0; max-height: 260px; overflow-y: auto; }
+    #list li { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #f2f2f2; }
+    #list li .pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 400; cursor: pointer; }
+    #list li input.sel { flex: none; width: 15px; height: 15px; cursor: pointer; accent-color: #E53935; }
+    #list li input.sel:disabled { cursor: default; opacity: .4; }
+    #list .thumb { flex: none; width: 48px; height: 27px; object-fit: cover; border-radius: 3px; background: #e6e6e6 linear-gradient(135deg, #eee, #ddd); }
+    #list .meta { flex: 1; min-width: 0; }
+    #list .name { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #list .kind { display: inline-block; font-size: 10px; font-weight: 700; color: #fff; background: #1565c0; border-radius: 3px; padding: 0 4px; margin-right: 5px; }
+    #list .kind.direct { background: #2e7d32; }
+    #list .kind.page { background: #8e24aa; }
+    #list .kind.donek { background: #2e7d32; }
+    #list .rowStatus { font-size: 11px; color: #555; white-space: nowrap; }
+    #list .rowStatus.err { color: #c62828; white-space: normal; max-width: 90px; }
+    .empty { color: #999; font-size: 12px; padding: 6px 0; }
+    .settings { margin-top: 14px; border-top: 1px solid #eee; padding-top: 12px; }
     label { display: block; font-weight: 600; margin-bottom: 6px; }
-    input[type="text"] {
-      width: 100%; box-sizing: border-box; padding: 7px 9px;
-      border: 1px solid #ccc; border-radius: 5px; font-size: 13px;
-    }
+    input[type="text"] { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid #ccc; border-radius: 5px; font-size: 13px; }
     input[type="text"]:focus { outline: none; border-color: #E53935; }
-    .hint { color: #777; font-size: 11px; line-height: 1.5; margin: 8px 0 14px; }
+    .hint { color: #777; font-size: 11px; line-height: 1.5; margin: 8px 0 10px; }
     .hint code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; }
-    button {
-      width: 100%; padding: 9px; border: none; border-radius: 5px;
-      font-size: 13px; font-weight: 600; cursor: pointer; color: #fff;
-    }
-    #download { background: #E53935; margin-bottom: 8px; }
-    #download:hover { background: #d32f2f; }
-    #save { background: #666; }
-    #save:hover { background: #555; }
+    .head-actions { display: flex; gap: 6px; }
+    .head-left { display: flex; align-items: center; gap: 6px; }
+    #selectAll { width: 15px; height: 15px; cursor: pointer; accent-color: #E53935; }
+    #downloadPage { background: #8e24aa; } #downloadPage:hover { background: #7b1fa2; }
+    #downloadPage.done { background: #2e7d32; } #downloadPage.done:hover { background: #276b2b; }
+    #pageErr { display: block; color: #c62828; font-size: 11px; margin: 2px 0; }
+    #save { width: 100%; background: #666; } #save:hover { background: #555; }
     #saveStatus { text-align: center; color: #2e7d32; font-size: 12px; height: 15px; margin-top: 6px; }
-    .dlstatus {
-      margin-top: 12px; border-top: 1px solid #eee; padding-top: 10px;
-      font-size: 12px; color: #333; min-height: 18px; word-break: break-all;
-    }
-    .dlstatus .bar { height: 6px; background: #eee; border-radius: 3px; overflow: hidden; margin-top: 6px; }
-    .dlstatus .bar > i { display: block; height: 100%; width: 0; background: #1565c0; }
-    .dlstatus.err { color: #c62828; }
-    .dlstatus.done { color: #2e7d32; }
     .usage { color: #555; font-size: 11px; margin-top: 12px; border-top: 1px solid #eee; padding-top: 10px; line-height: 1.6; }
   </style>
 </head>
 <body>
   <h1 data-i18n="popupHeading"></h1>
 
-  <button id="download" data-i18n="downloadPageBtn"></button>
-  <div id="dlstatus" class="dlstatus"></div>
+  <div class="row">
+    <span class="head-left">
+      <input type="checkbox" id="selectAll" data-i18n-title="selectAllTitle">
+      <h2 data-i18n="videosHeading"></h2>
+    </span>
+    <span class="head-actions">
+      <button id="refresh" class="small" data-i18n="refreshVideos"></button>
+      <button id="downloadPage" class="small" data-i18n="downloadSelected"></button>
+    </span>
+  </div>
+  <span id="pageErr"></span>
+  <ul id="list"></ul>
 
-  <div style="margin-top:14px">
+  <div class="settings">
     <label for="savePath" data-i18n="savePathLabel"></label>
     <input type="text" id="savePath" data-i18n-ph="savePathPlaceholder">
     <div class="hint" data-i18n-html="savePathHint"></div>

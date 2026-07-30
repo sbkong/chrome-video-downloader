@@ -84,6 +84,16 @@ function Invoke-Download($msg) {
 
   $ytArgs = @('--newline', '--no-playlist')
   if (Test-Path (Join-Path $bin 'ffmpeg.exe')) { $ytArgs += @('--ffmpeg-location', $bin) }
+  if ($msg.referer) { $ytArgs += @('--referer', [string]$msg.referer) }
+
+  # Prefer H.264 mp4 video + AAC (m4a) stereo audio, merged into mp4. YouTube's
+  # default "best" is VP9/webm + Opus audio, which is what makes files come out as
+  # .webm and can play with broken / single-channel sound in many players. The
+  # fallback chain still lets any single-file source (a plain .mp4, HLS/DASH, etc.)
+  # download. --merge-output-format mp4 + --remux ensures the container is mp4.
+  $ytArgs += @('-f', 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b',
+               '--merge-output-format', 'mp4',
+               '--remux-video', 'mp4')
 
   if ([string]::IsNullOrWhiteSpace($setting)) {
     $ytArgs += @('-P', $dlBase, '-o', $fileTmpl)
@@ -99,7 +109,7 @@ function Invoke-Download($msg) {
   $ytArgs += [string]$msg.url
 
   Log ('URL=' + [string]$msg.url)
-  Log ('savePath=' + $save)
+  Log ('savePath=' + $setting)
   Log ('CMD: "' + $ytdlp + '" ' + ($ytArgs -join ' '))
 
   $last = $null
@@ -118,6 +128,7 @@ function Invoke-Download($msg) {
       $tail.Add($line); if ($tail.Count -gt 8) { $tail.RemoveAt(0) }
       if ($line -match 'Destination:\s*(.+)$') { $last = $Matches[1] }
       elseif ($line -match 'Merging formats into "(.+)"') { $last = $Matches[1] }
+      elseif ($line -match '\[download\]\s*(.+?)\s+has already been downloaded') { $last = $Matches[1] }
       $pct = $null
       if ($line -match '(\d{1,3}(?:\.\d+)?)%') { $pct = [double]$Matches[1] }
       Send-Message @{ type = 'progress'; line = $line; percent = $pct }
@@ -131,17 +142,40 @@ function Invoke-Download($msg) {
   if ($code -eq 0) {
     $name = if ($last) { Split-Path -Leaf $last } else { $null }
     Log ('DONE file=' + $name)
-    Send-Message @{ type = 'done'; ok = $true; file = $name }
+    Send-Message @{ type = 'done'; ok = $true; file = $name; path = $last }
   } else {
     Log 'ERROR reported to extension'
     Send-Message @{ type = 'error'; message = ("yt-dlp exited with code " + $code + "`n" + ($tail -join "`n")) }
   }
 }
 
+function Reveal-Path([string]$path) {
+  try {
+    if ($path -and (Test-Path $path)) {
+      Start-Process explorer.exe -ArgumentList ('/select,"' + $path + '"')
+    } elseif ($path) {
+      $dir = Split-Path -Parent $path
+      if ($dir -and (Test-Path $dir)) { Start-Process explorer.exe -ArgumentList ('"' + $dir + '"') }
+    }
+    Send-Message @{ type = 'revealed'; ok = $true }
+  } catch { Send-Message @{ type = 'revealed'; ok = $false; message = $_.Exception.Message } }
+}
+
 while ($true) {
   $msg = Read-Message
   if ($null -eq $msg) { Log 'stdin closed; exiting'; break }
   Log ('message received: ' + ($msg | ConvertTo-Json -Compress))
+  if ($msg.cmd -eq 'reveal') { Reveal-Path ([string]$msg.path); continue }
+  if ($msg.cmd -eq 'exists') {
+    # Report which of the given paths no longer exist, so the extension can drop
+    # stale "done" entries for files the user has since deleted.
+    $missing = New-Object System.Collections.Generic.List[string]
+    foreach ($p in @($msg.paths)) {
+      if ($p -and -not (Test-Path -LiteralPath ([string]$p))) { $missing.Add([string]$p) }
+    }
+    Send-Message @{ type = 'exists'; missing = @($missing) }
+    continue
+  }
   try { Invoke-Download $msg }
   catch { Log ('EXCEPTION: ' + $_.Exception.Message); Send-Message @{ type = 'error'; message = $_.Exception.Message } }
 }

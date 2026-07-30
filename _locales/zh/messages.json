@@ -14,5 +14,14 @@
   "stDownloading": { "message": "下载中" },
   "stDone": { "message": "完成" },
   "stError": { "message": "错误" },
-  "hostMissingHint": { "message": "本地主机似乎未安装。请运行 native/install.ps1。" }
+  "hostMissingHint": { "message": "本地主机似乎未安装。请运行 native/install.ps1。" },
+  "videosHeading": { "message": "检测到的视频" },
+  "refreshVideos": { "message": "刷新" },
+  "dlBtn": { "message": "下载" },
+  "openFolderBtn": { "message": "打开文件夹" },
+  "noVideos": { "message": "此标签页未找到视频。播放后刷新，或使用下方“整个页面”。" },
+  "pageItem": { "message": "全部下载" },
+  "downloadSelected": { "message": "下载所选" },
+  "selectAllTitle": { "message": "全选 / 取消" },
+  "streamItem": { "message": "流媒体（从页面提取）" }
 }
