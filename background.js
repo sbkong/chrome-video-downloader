@@ -1,171 +1,93 @@
-const RULE_ID = 23456;
+// Video Downloader — thin client for a local yt-dlp native messaging host.
+// The extension does NOT download anything itself; it just hands the page URL to
+// the local host (host.py), which runs yt-dlp (extract + decrypt + merge via
+// ffmpeg) and saves the file. See native/README.md for install.
 
-// Intended filenames for the downloads we start, in order.
-const pendingPaths = [];
+const HOST = 'com.sbk.ytdlp';
 
-// Register onDeterminingFilename ONLY while we have a download in flight, and remove
-// it as soon as our queue drains. onDeterminingFilename is global (it fires for every
-// download in the browser), so a permanently-registered listener from each extension
-// makes Chrome's multi-listener conflict resolution drop filenames. Keeping the
-// listener registered only while we are actively downloading means an idle extension
-// never interferes with the companion Image Downloader's downloads (or anything else).
-function determineFilename(item, suggest) {
-  const path = pendingPaths.shift();
-  if (path) {
-    suggest({ filename: path, conflictAction: 'uniquify' });
-  } else {
-    suggest();
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'download') {
+    const url = request.url || (sender.tab && sender.tab.url);
+    if (url) startDownload(url);
+    sendResponse({ started: !!url });
+    return;
   }
-  if (pendingPaths.length === 0) {
-    chrome.downloads.onDeterminingFilename.removeListener(determineFilename);
-  }
-}
-
-function enqueue(path) {
-  pendingPaths.push(path);
-  if (!chrome.downloads.onDeterminingFilename.hasListener(determineFilename)) {
-    chrome.downloads.onDeterminingFilename.addListener(determineFilename);
-  }
-}
-
-chrome.runtime.onMessage.addListener((request, sender) => {
-  if (request.action === 'downloadVideo') {
-    const referer = request.referer || sender.url;
-    handleDownload(request.url, referer, request.title || '');
+  if (request.action === 'getStatus') {
+    chrome.storage.session.get('status').then((g) => sendResponse(g.status || null));
+    return true;
   }
 });
 
-async function handleDownload(videoUrl, referer, title) {
-  const subfolder = await getSubfolder(referer, title);
+async function startDownload(pageUrl) {
+  const { savePath } = await chrome.storage.sync.get('savePath');
+  console.log('[vid-dl] startDownload url=', pageUrl, '| savePath=', JSON.stringify(savePath || '(default)'));
+  await setStatus({ state: 'starting', url: pageUrl });
+
+  let port;
+  try {
+    port = chrome.runtime.connectNative(HOST);
+    console.log('[vid-dl] connectNative ok:', HOST);
+  } catch (e) {
+    console.error('[vid-dl] connectNative threw', e);
+    await setStatus({ state: 'error', url: pageUrl, message: String(e) });
+    flashBadge('ERR', '#c62828');
+    return;
+  }
+
+  let finished = false;
+
+  port.onMessage.addListener(async (msg) => {
+    if (!msg || !msg.type) return;
+    if (msg.type === 'progress') { if (msg.line) console.log('[vid-dl][host]', msg.line); }
+    else console.log('[vid-dl][host]', JSON.stringify(msg));
+    if (msg.type === 'progress') {
+      await setStatus({ state: 'downloading', url: pageUrl, percent: msg.percent, line: msg.line });
+      if (typeof msg.percent === 'number') flashBadge(Math.round(msg.percent) + '%', '#1565c0', false);
+    } else if (msg.type === 'done') {
+      finished = true;
+      await setStatus({ state: 'done', url: pageUrl, file: msg.file });
+      flashBadge('OK', '#2e7d32');
+      try { port.disconnect(); } catch (e) {}
+    } else if (msg.type === 'error') {
+      finished = true;
+      await setStatus({ state: 'error', url: pageUrl, message: msg.message });
+      flashBadge('ERR', '#c62828');
+      try { port.disconnect(); } catch (e) {}
+    }
+  });
+
+  port.onDisconnect.addListener(async () => {
+    const err = chrome.runtime.lastError;
+    console.log('[vid-dl] port disconnected; lastError=', err ? err.message : '(none)', '| finished=', finished);
+    if (!finished) {
+      const message = err ? err.message : 'host disconnected';
+      // Most common: host not installed / not registered.
+      await setStatus({ state: 'error', url: pageUrl, message, hostMissing: !!err });
+      flashBadge('ERR', '#c62828');
+    }
+  });
 
   try {
-    // Referer for the fetch() below. fetch() can't set Referer itself (forbidden
-    // header), so declarativeNetRequest sets it on the xmlhttprequest. This is the
-    // path that reliably carries Referer — unlike a direct chrome.downloads request,
-    // where the header rule doesn't take effect (that's why hotlink videos failed).
-    await chrome.declarativeNetRequest.updateSessionRules({
-      removeRuleIds: [RULE_ID],
-      addRules: [{
-        id: RULE_ID,
-        priority: 1,
-        action: {
-          type: 'modifyHeaders',
-          requestHeaders: [{
-            header: 'Referer',
-            operation: 'set',
-            value: referer
-          }]
-        },
-        condition: {
-          urlFilter: '*',
-          resourceTypes: ['xmlhttprequest', 'media', 'other', 'object', 'sub_frame']
-        }
-      }]
-    });
-
-    const response = await fetch(videoUrl, { headers: { 'Referer': referer } });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const blob = await response.blob();
-    const dataUrl = await blobToDataUrl(blob);
-    const path = buildPath(subfolder, getFilename(videoUrl));
-    enqueue(path);
-
-    await chrome.downloads.download({
-      url: dataUrl,
-      filename: path,
-      conflictAction: 'uniquify'
-    });
-
-    setTimeout(() => {
-      chrome.declarativeNetRequest.updateSessionRules({
-        removeRuleIds: [RULE_ID]
-      });
-    }, 15000);
-
-  } catch (error) {
-    // Fallback: let Chrome fetch the URL directly (handles very large files that
-    // are not hotlink-protected; a protected one may still fail here).
-    try {
-      const path = buildPath(subfolder, getFilename(videoUrl));
-      enqueue(path);
-      await chrome.downloads.download({
-        url: videoUrl,
-        filename: path,
-        conflictAction: 'uniquify'
-      });
-    } catch (e) {}
+    port.postMessage({ url: pageUrl, savePath: savePath || '', format: 'best' });
+  } catch (e) {
+    await setStatus({ state: 'error', url: pageUrl, message: String(e) });
+    flashBadge('ERR', '#c62828');
   }
 }
 
-async function blobToDataUrl(blob) {
-  const buffer = await blob.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-  }
-
-  const type = blob.type || 'video/mp4';
-  return `data:${type};base64,${btoa(binary)}`;
+async function setStatus(status) {
+  status.ts = 0;
+  await chrome.storage.session.set({ status });
+  // Best-effort broadcast to an open popup (ignored if none).
+  chrome.runtime.sendMessage({ action: 'status', status }).catch(() => {});
 }
 
-async function getSubfolder(referer, title) {
-  const { subfolder } = await chrome.storage.sync.get('subfolder');
-  let pattern = (subfolder || '').trim();
-  if (!pattern) return '';
-
-  let domain = '';
+let badgeTimer = null;
+function flashBadge(text, color, autoClear = true) {
   try {
-    domain = new URL(referer).hostname;
-  } catch {}
-
-  const safeTitle = (title || '').replace(/[\\/]+/g, ' ').trim().slice(0, 100);
-
-  pattern = pattern
-    .replace(/\{domain\}/g, domain)
-    .replace(/\{title\}/g, safeTitle);
-
-  return sanitizePath(pattern);
-}
-
-function sanitizePath(path) {
-  return path
-    .split(/[\\/]+/)
-    .map(sanitizeSegment)
-    .filter(Boolean)
-    .join('/');
-}
-
-function sanitizeSegment(segment) {
-  const cleaned = segment
-    .replace(/[<>:"|?*\x00-\x1f]/g, '_')
-    .replace(/[. ]+$/, '')
-    .trim();
-  return /^\.+$/.test(cleaned) ? '' : cleaned;
-}
-
-function buildPath(subfolder, filename) {
-  const leaf = sanitizeSegment(filename.replace(/[\\/]+/g, '_')) || `video_${Date.now()}.mp4`;
-  return subfolder ? `${subfolder}/${leaf}` : leaf;
-}
-
-function getFilename(url) {
-  try {
-    const pathname = new URL(url).pathname;
-    const name = decodeURIComponent(pathname.split('/').pop() || '');
-    if (name && /\.(mp4|webm|mkv|mov|m4v|avi|ts|m3u8)$/i.test(name)) {
-      return name;
-    }
-    if (name && name.includes('.')) {
-      return name;
-    }
-    return `video_${Date.now()}.mp4`;
-  } catch {
-    return `video_${Date.now()}.mp4`;
-  }
+    chrome.action.setBadgeBackgroundColor({ color });
+    chrome.action.setBadgeText({ text });
+    if (badgeTimer) { clearTimeout(badgeTimer); badgeTimer = null; }
+    if (autoClear) badgeTimer = setTimeout(() => chrome.action.setBadgeText({ text: '' }), 3000);
+  } catch (e) {}
 }

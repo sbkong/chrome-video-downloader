@@ -1,12 +1,18 @@
 {
   "appName": { "message": "Video Downloader" },
-  "appDesc": { "message": "Download videos with Ctrl+Alt+Click." },
-  "actionTitle": { "message": "Video Downloader settings" },
-  "popupHeading": { "message": "Video Downloader Settings" },
-  "subfolderLabel": { "message": "Subfolder name" },
-  "subfolderPlaceholder": { "message": "Leave empty to save directly in the downloads folder" },
-  "subfolderHint": { "message": "Creates a subfolder with this name inside the <code>downloads</code> folder.<br>Leave empty to save without a subfolder.<br><code>{domain}</code> = site domain folder, <code>{title}</code> = page title folder.<br>Combine / nest allowed (e.g. <code>{domain}/{title}</code>)." },
-  "saveButton": { "message": "Save" },
+  "appDesc": { "message": "Download the current page's video with a local yt-dlp, via Ctrl+Alt+Click or the popup." },
+  "actionTitle": { "message": "Video Downloader" },
+  "popupHeading": { "message": "Video Downloader" },
+  "savePathLabel": { "message": "Save folder / path" },
+  "savePathPlaceholder": { "message": "e.g. {domain}/{title} or C:\\Videos (empty = Downloads)" },
+  "savePathHint": { "message": "Folder for <code>yt-dlp</code> to save into. Absolute paths are used as-is; relative paths go under the default Downloads folder.<br><code>{domain}</code> = site domain, <code>{title}</code> = video title. Combine / nest allowed (e.g. <code>{domain}/{title}</code>)." },
+  "saveButton": { "message": "Save settings" },
   "savedStatus": { "message": "Saved" },
-  "usage": { "message": "How to use: Ctrl + Alt + Click on a video" }
+  "downloadPageBtn": { "message": "Download this page" },
+  "usage": { "message": "How to use: Ctrl + Alt + Click on a video page, or the button above" },
+  "stStarting": { "message": "Starting..." },
+  "stDownloading": { "message": "Downloading" },
+  "stDone": { "message": "Done" },
+  "stError": { "message": "Error" },
+  "hostMissingHint": { "message": "The native host does not seem installed. Run native/install.ps1." }
 }

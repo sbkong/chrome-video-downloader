@@ -4,51 +4,51 @@
   <meta charset="UTF-8">
   <style>
     body {
-      width: 300px;
-      margin: 0;
-      padding: 16px;
-      font-family: -apple-system, "Segoe UI", sans-serif;
-      font-size: 13px;
-      color: #222;
+      width: 320px; margin: 0; padding: 16px;
+      font-family: -apple-system, "Segoe UI", sans-serif; font-size: 13px; color: #222;
     }
     h1 { font-size: 14px; margin: 0 0 12px; }
     label { display: block; font-weight: 600; margin-bottom: 6px; }
     input[type="text"] {
-      width: 100%;
-      box-sizing: border-box;
-      padding: 7px 9px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      font-size: 13px;
+      width: 100%; box-sizing: border-box; padding: 7px 9px;
+      border: 1px solid #ccc; border-radius: 5px; font-size: 13px;
     }
     input[type="text"]:focus { outline: none; border-color: #E53935; }
     .hint { color: #777; font-size: 11px; line-height: 1.5; margin: 8px 0 14px; }
     .hint code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; }
     button {
-      width: 100%;
-      padding: 8px;
-      background: #E53935;
-      color: #fff;
-      border: none;
-      border-radius: 5px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
+      width: 100%; padding: 9px; border: none; border-radius: 5px;
+      font-size: 13px; font-weight: 600; cursor: pointer; color: #fff;
     }
-    button:hover { background: #d32f2f; }
-    #status { text-align: center; color: #E53935; font-size: 12px; height: 16px; margin-top: 8px; }
+    #download { background: #E53935; margin-bottom: 8px; }
+    #download:hover { background: #d32f2f; }
+    #save { background: #666; }
+    #save:hover { background: #555; }
+    #saveStatus { text-align: center; color: #2e7d32; font-size: 12px; height: 15px; margin-top: 6px; }
+    .dlstatus {
+      margin-top: 12px; border-top: 1px solid #eee; padding-top: 10px;
+      font-size: 12px; color: #333; min-height: 18px; word-break: break-all;
+    }
+    .dlstatus .bar { height: 6px; background: #eee; border-radius: 3px; overflow: hidden; margin-top: 6px; }
+    .dlstatus .bar > i { display: block; height: 100%; width: 0; background: #1565c0; }
+    .dlstatus.err { color: #c62828; }
+    .dlstatus.done { color: #2e7d32; }
     .usage { color: #555; font-size: 11px; margin-top: 12px; border-top: 1px solid #eee; padding-top: 10px; line-height: 1.6; }
   </style>
 </head>
 <body>
   <h1 data-i18n="popupHeading"></h1>
 
-  <label for="subfolder" data-i18n="subfolderLabel"></label>
-  <input type="text" id="subfolder" data-i18n-ph="subfolderPlaceholder">
-  <div class="hint" data-i18n-html="subfolderHint"></div>
+  <button id="download" data-i18n="downloadPageBtn"></button>
+  <div id="dlstatus" class="dlstatus"></div>
 
-  <button id="save" data-i18n="saveButton"></button>
-  <div id="status"></div>
+  <div style="margin-top:14px">
+    <label for="savePath" data-i18n="savePathLabel"></label>
+    <input type="text" id="savePath" data-i18n-ph="savePathPlaceholder">
+    <div class="hint" data-i18n-html="savePathHint"></div>
+    <button id="save" data-i18n="saveButton"></button>
+    <div id="saveStatus"></div>
+  </div>
 
   <div class="usage" data-i18n="usage"></div>
 

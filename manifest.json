@@ -4,18 +4,16 @@
   "version": "0.0.0",
   "description": "__MSG_appDesc__",
   "default_locale": "en",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7WffPVIQapfG52Y6dQ+g5sEUM18UXKe3QbFNSX6CSAMnSeFlYIxk/NtV4fJEpeLApKLAI2vIKgDRkX49atfoF/sWMUdKjrQhueZZnT9QwjkDMLWXN9G/A0GgtIzJRn9esT9D3iEDW/OPqQ3nQeUp47hf+cMPRyftcS8BXpQzXzOVHVOY67L95yFqClx0Vku+2C7OeIs+jF3auzmymJFlp2P3N8PNnNcn6E9L+jT3wsWU1W1IpZW8r0RrqHligrs+Pt21nR0UnrgdHNXdEI6aKqaX1bCFsOdHmVMlUfeHu1t69cAB6MaDjKb8khPh97YV7Mh2l74Jc2b4jDD7+MZBMwIDAQAB",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
   "permissions": [
-    "downloads",
+    "nativeMessaging",
     "storage",
-    "declarativeNetRequest"
-  ],
-  "host_permissions": [
-    "<all_urls>"
+    "activeTab"
   ],
   "action": {
     "default_popup": "popup.html",

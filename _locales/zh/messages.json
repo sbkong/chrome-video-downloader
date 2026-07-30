@@ -1,12 +1,18 @@
 {
   "appName": { "message": "视频下载器" },
-  "appDesc": { "message": "使用 Ctrl+Alt+点击 下载视频。" },
-  "actionTitle": { "message": "视频下载器设置" },
-  "popupHeading": { "message": "视频下载器设置" },
-  "subfolderLabel": { "message": "子文件夹名称" },
-  "subfolderPlaceholder": { "message": "留空则直接保存到 downloads 文件夹" },
-  "subfolderHint": { "message": "在 <code>downloads</code> 文件夹内创建指定名称的子文件夹。<br>留空则不创建子文件夹。<br><code>{domain}</code> = 网站域名文件夹，<code>{title}</code> = 页面标题文件夹。<br>可组合 / 嵌套（例如 <code>{domain}/{title}</code>）。" },
-  "saveButton": { "message": "保存" },
+  "appDesc": { "message": "通过 Ctrl+Alt+点击 或弹窗，用本地 yt-dlp 下载当前页面的视频。" },
+  "actionTitle": { "message": "视频下载器" },
+  "popupHeading": { "message": "视频下载器" },
+  "savePathLabel": { "message": "保存文件夹 / 路径" },
+  "savePathPlaceholder": { "message": "例如 {domain}/{title} 或 C:\\Videos（留空 = 下载文件夹）" },
+  "savePathHint": { "message": "<code>yt-dlp</code> 保存的文件夹。绝对路径按原样使用；相对路径保存到默认下载文件夹下。<br><code>{domain}</code> = 网站域名，<code>{title}</code> = 视频标题。可组合 / 嵌套（例如 <code>{domain}/{title}</code>）。" },
+  "saveButton": { "message": "保存设置" },
   "savedStatus": { "message": "已保存" },
-  "usage": { "message": "用法：在视频上 Ctrl + Alt + 点击" }
+  "downloadPageBtn": { "message": "下载当前页面" },
+  "usage": { "message": "用法：在视频页面 Ctrl + Alt + 点击，或点击上方按钮" },
+  "stStarting": { "message": "开始中..." },
+  "stDownloading": { "message": "下载中" },
+  "stDone": { "message": "完成" },
+  "stError": { "message": "错误" },
+  "hostMissingHint": { "message": "本地主机似乎未安装。请运行 native/install.ps1。" }
 }

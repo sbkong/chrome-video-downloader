@@ -1,12 +1,18 @@
 {
   "appName": { "message": "동영상 다운로더" },
-  "appDesc": { "message": "Ctrl+Alt+클릭으로 동영상을 다운로드합니다." },
-  "actionTitle": { "message": "동영상 다운로더 설정" },
-  "popupHeading": { "message": "동영상 다운로더 설정" },
-  "subfolderLabel": { "message": "서브 폴더 이름" },
-  "subfolderPlaceholder": { "message": "비워두면 downloads 폴더에 바로 저장" },
-  "subfolderHint": { "message": "<code>downloads</code> 폴더 안에 지정한 이름의 서브 폴더를 만들어 저장합니다.<br>비워두면 서브 폴더 없이 저장됩니다.<br><code>{domain}</code> = 도메인명 폴더, <code>{title}</code> = 페이지 제목 폴더.<br>조합·중첩 가능 (예: <code>{domain}/{title}</code>)." },
-  "saveButton": { "message": "저장" },
+  "appDesc": { "message": "Ctrl+Alt+클릭 또는 팝업으로 현재 페이지의 동영상을 로컬 yt-dlp로 다운로드합니다." },
+  "actionTitle": { "message": "동영상 다운로더" },
+  "popupHeading": { "message": "동영상 다운로더" },
+  "savePathLabel": { "message": "저장 폴더 / 경로" },
+  "savePathPlaceholder": { "message": "예: {domain}/{title} 또는 C:\\Videos (비우면 다운로드 폴더)" },
+  "savePathHint": { "message": "<code>yt-dlp</code>가 저장할 폴더입니다. 절대경로면 그 위치, 상대경로면 기본 다운로드 폴더 아래에 저장됩니다.<br><code>{domain}</code> = 사이트 도메인, <code>{title}</code> = 영상 제목. 조합·중첩 가능 (예: <code>{domain}/{title}</code>)." },
+  "saveButton": { "message": "설정 저장" },
   "savedStatus": { "message": "저장되었습니다" },
-  "usage": { "message": "사용법: 동영상 위에서 Ctrl + Alt + 클릭" }
+  "downloadPageBtn": { "message": "현재 페이지 다운로드" },
+  "usage": { "message": "사용법: 동영상 페이지에서 Ctrl + Alt + 클릭, 또는 위 버튼" },
+  "stStarting": { "message": "시작 중..." },
+  "stDownloading": { "message": "다운로드 중" },
+  "stDone": { "message": "완료" },
+  "stError": { "message": "오류" },
+  "hostMissingHint": { "message": "네이티브 호스트가 설치되지 않은 것 같습니다. native/install.ps1 을 실행하세요." }
 }
