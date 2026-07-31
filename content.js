@@ -260,6 +260,7 @@ function startBadge(b, video) {
 function makeBadge(video) {
   const b = document.createElement('div');
   b.setAttribute('aria-label', 'Download video');
+  b.dataset.mediadl = 'video'; // lets the Image Downloader detect/avoid our badge
   b.dataset.state = 'idle';
   b.style.cssText = [
     'position:fixed', 'z-index:2147483647', 'width:30px', 'height:30px',
