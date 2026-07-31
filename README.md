@@ -1,63 +1,70 @@
 # Video Downloader
 
-A Chrome (Manifest V3) extension that downloads the video on the current page by
-handing the page URL to a local **yt-dlp** native host. The extension itself does
-not fetch media — a local helper (`native/host.py`) runs yt-dlp + ffmpeg to
-extract, decode, merge, and save. This makes real sites work: Vimeo, most
-HLS/DASH players, and the 1000+ sites yt-dlp supports.
+A Chrome (Manifest V3) extension that downloads videos from the current page with
+a local **yt-dlp** + **ffmpeg** helper. The extension detects videos and forwards
+a URL; a bundled native host does the actual download and merge. This makes real
+sites work (HLS/DASH players, Vimeo, YouTube, and the many sites yt-dlp supports)
+without fragile in-browser extraction.
 
-## Architecture
+## Setup
+
+1. `chrome://extensions` -> enable Developer mode -> **Load unpacked** -> this folder.
+2. Open the `native` folder and **double-click `install.bat`**, then reload the extension.
+
+Nothing else to install: `yt-dlp.exe` and `ffmpeg.exe` are bundled in `native/bin`
+and the host runs on built-in PowerShell. `install.bat` only registers the host so
+the browser is allowed to launch it. See [`native/README.md`](native/README.md).
+
+## How to use
+
+Any of these:
+
+- **Popup**: click the toolbar icon. It lists detected videos (files, streams, and
+  a "PAGE" item for the whole page). Check items and use **Download selected**, or
+  the per-row button. The button cycles Download -> % -> Open folder.
+- **On-video button**: hover a video; a download button appears at its top-right
+  and mirrors the popup state.
+- **Shortcut**: a modifier + click on a video (default Ctrl + Alt + left click).
+
+Downloads run one at a time. Finished files can be opened via **Open folder**;
+the popup's refresh button re-checks whether a file still exists on disk.
+
+## Settings (popup -> Settings tab)
+
+- **Save folder**: absolute path, or relative to Downloads; empty = Downloads.
+  Tokens `{domain}` and `{title}` become the site domain / video title.
+- **Download shortcut**: enable/disable, and capture your own combo by holding the
+  modifier keys and left/right-clicking the capture field.
+- **Show download button on video**: toggle the on-video hover button.
+- **Use browser cookies**: pass the logged-in Chrome session's cookies to yt-dlp
+  for member-only / purchased videos (off by default).
+
+## How it works
 
 ```
-[web page] --Ctrl+Alt+Click / popup--> [extension] --Native Messaging--> [host.py] --> yt-dlp + ffmpeg --> file
+[page] --detect / click / popup--> [extension] --Native Messaging--> [host.ps1] --> yt-dlp + ffmpeg --> file
 ```
 
-- **Extension**: only forwards the page URL and a save folder; shows progress.
-- **Native host**: does the actual download/merge with yt-dlp.
+- Direct `http(s)` files are downloaded by their own URL.
+- HLS/DASH streams are found by sniffing `.m3u8` / `.mpd` requests.
+- The **PAGE** item hands the page URL to yt-dlp's site extractor.
+- Output is mp4 (H.264 + AAC) to avoid webm/opus playback issues. The host sends a
+  Referer for hotlink-protected files, keeps yt-dlp up to date, and falls back to a
+  plain HTTP download if yt-dlp fails on a direct file. Logs: `native/logs`.
 
-## Capabilities
-
-- Download the current page's video from a video page, via **Ctrl+Alt+Click** on
-  the video or the popup's **Download this page** button.
-- Works with MSE/DASH/HLS players and proprietary formats (Vimeo, etc.) because
-  yt-dlp does the extraction — not fragile in-browser sniffing.
-- Highest quality + audio + subtitles + large files (handled by yt-dlp/ffmpeg,
-  not browser memory).
-- Configurable **save folder** (absolute path); empty = system Downloads.
-- Toolbar badge shows progress (`%`), then `OK` / `ERR`; popup shows a progress
-  bar and the saved file name.
-- Multilingual UI (English, Korean, Chinese).
-
-## Setup (2 steps, nothing to install)
-
-1. `chrome://extensions` -> Developer mode -> **Load unpacked** -> this folder.
-2. Open the `native` folder and **double-click `install.bat`**, then reload the
-   extension.
-
-No Python / ffmpeg / yt-dlp to install — `yt-dlp.exe` and `ffmpeg.exe` are
-bundled in `native/bin`, and the host runs on built-in PowerShell. No extension
-ID to copy (fixed by the manifest `key`). The one unavoidable step is
-`install.bat`, which registers the host (a browser extension cannot launch a
-local program without this). See [`native/README.md`](native/README.md).
-
-## Usage
-
-- Open a video page, then **Ctrl+Alt+Click** the video (or use the popup button).
-- Set the save folder in the popup if you want a specific location.
+UI is available in English, Korean, and Chinese.
 
 ## Permissions
 
 - `nativeMessaging`: talk to the local yt-dlp host.
-- `storage`: remember the save folder.
-- `activeTab`: read the current tab's URL when you trigger a download.
+- `storage`: remember settings.
+- `activeTab`, `host_permissions`: read the active tab and current page URL.
+- `webRequest`: observe `.m3u8` / `.mpd` requests to detect streams.
 
-## Limits / notes
+## Notes
 
-- The **native host must be installed per machine** (Python, ffmpeg, yt-dlp).
+- The native host is registered per machine (one double-click of `install.bat`).
 - Downloading may violate a site's Terms of Service; use responsibly.
-- Chrome Web Store forbids in-extension YouTube downloading; the "extension
-  forwards a URL, a local app downloads" split is why this design exists, but
-  distribution/policy remains your responsibility.
 
 ## License
 
