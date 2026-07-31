@@ -33,6 +33,17 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
   }
   // Background progress broadcast -> update the matching on-page badge.
   if (req && req.action === 'status') { applyBadgeStatus(req.status); }
+  // A stream manifest was (re)sniffed for this tab -> re-key blob/MSE badges to it
+  // and re-hydrate (fixes the reload race where the badge resolved before the
+  // page had re-fetched its manifest).
+  if (req && req.action === 'mediaFound' && req.url) {
+    vdlBadges.forEach((b, video) => {
+      const src = videoSrc(video);
+      if (src && /^https?:/i.test(src)) return; // direct video, unaffected
+      b.dataset.dlurl = req.url;
+      hydrateBadge(b);
+    });
+  }
 });
 
 // Best-effort thumbnail for a <video>: a small JPEG of the current frame, or the

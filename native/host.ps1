@@ -69,6 +69,39 @@ function Update-YtDlpIfStale {
   } catch { Log ('update check failed: ' + $_.Exception.Message) }
 }
 
+# A plain, directly-fetchable media file (not an HLS/DASH manifest or a webpage).
+function Test-DirectMedia([string]$url) {
+  return ($url -match '\.(mp4|m4v|mov|mkv|webm|avi|flv|ts|mp3|m4a|aac|ogg|oga|wav|wmv)(\?|#|$)')
+}
+
+# Resolve the save folder for the plain-download fallback (yt-dlp normally handles
+# this via -o/-P). Tokens: {domain} -> URL host, {title} -> file name (no ext).
+function Resolve-DestFolder([string]$setting, [string]$url) {
+  $base = Join-Path $env:USERPROFILE 'Downloads'
+  if ([string]::IsNullOrWhiteSpace($setting)) { return $base }
+  $vhost = 'site'; $title = 'video'
+  try { $u = [Uri]$url; $vhost = $u.Host; $title = [System.IO.Path]::GetFileNameWithoutExtension($u.AbsolutePath) } catch {}
+  $folder = $setting -replace '\{domain\}', $vhost -replace '\{title\}', $title
+  if ([System.IO.Path]::IsPathRooted($folder)) { return $folder.TrimEnd('\', '/') }
+  return (Join-Path $base (($folder -replace '/', '\').Trim('\')))
+}
+
+# Fallback download: fetch a direct media URL over HTTP (with Referer for hotlink
+# protection), used only when yt-dlp itself couldn't get the file.
+function Invoke-DirectDownload([string]$url, [string]$folder, [string]$referer) {
+  if (-not (Test-Path $folder)) { New-Item -ItemType Directory -Force -Path $folder | Out-Null }
+  $name = ''
+  try { $name = [System.IO.Path]::GetFileName(([Uri]$url).AbsolutePath) } catch {}
+  if ([string]::IsNullOrWhiteSpace($name)) { $name = 'video.mp4' }
+  $dest = Join-Path $folder $name
+  $headers = @{}
+  if ($referer) { $headers['Referer'] = $referer }
+  $old = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'
+  try { Invoke-WebRequest -Uri $url -OutFile $dest -Headers $headers -UserAgent 'Mozilla/5.0' -UseBasicParsing }
+  finally { $ProgressPreference = $old }
+  return $dest
+}
+
 function Invoke-Download($msg) {
   if (-not $msg.url) { Send-Message @{ type = 'error'; message = 'no url' }; return }
   if (-not (Test-Path $ytdlp)) { Send-Message @{ type = 'error'; message = 'yt-dlp.exe missing in bin/' }; return }
@@ -85,6 +118,12 @@ function Invoke-Download($msg) {
   $ytArgs = @('--newline', '--no-playlist')
   if (Test-Path (Join-Path $bin 'ffmpeg.exe')) { $ytArgs += @('--ffmpeg-location', $bin) }
   if ($msg.referer) { $ytArgs += @('--referer', [string]$msg.referer) }
+
+  # Optionally use the logged-in Chrome session's cookies so member-only /
+  # purchased videos (Vimeo on-demand, etc.) download with the user's access.
+  # Off by default because reading Chrome's cookie DB can fail (locked / app-bound
+  # encryption) and would then abort even ordinary downloads. Toggled in the popup.
+  if ($msg.cookies) { $ytArgs += @('--cookies-from-browser', 'chrome') }
 
   # Prefer H.264 mp4 video + AAC (m4a) stereo audio, merged into mp4. YouTube's
   # default "best" is VP9/webm + Opus audio, which is what makes files come out as
@@ -144,6 +183,22 @@ function Invoke-Download($msg) {
     Log ('DONE file=' + $name)
     Send-Message @{ type = 'done'; ok = $true; file = $name; path = $last }
   } else {
+    Log ('yt-dlp failed (code ' + $code + ')')
+    # Fallback: if the URL is a plain media file, yt-dlp's generic extractor may
+    # have choked where a direct HTTP GET works. Try that before giving up.
+    if (Test-DirectMedia ([string]$msg.url)) {
+      Log 'attempting direct HTTP fallback...'
+      Send-Message @{ type = 'progress'; line = 'yt-dlp failed; trying direct download...'; percent = $null }
+      try {
+        $folder = Resolve-DestFolder $setting ([string]$msg.url)
+        $dest   = Invoke-DirectDownload ([string]$msg.url) $folder ([string]$msg.referer)
+        Log ('DIRECT DONE file=' + (Split-Path -Leaf $dest))
+        Send-Message @{ type = 'done'; ok = $true; file = (Split-Path -Leaf $dest); path = $dest }
+        return
+      } catch {
+        Log ('direct fallback failed: ' + $_.Exception.Message)
+      }
+    }
     Log 'ERROR reported to extension'
     Send-Message @{ type = 'error'; message = ("yt-dlp exited with code " + $code + "`n" + ($tail -join "`n")) }
   }

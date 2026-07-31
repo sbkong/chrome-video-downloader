@@ -9,6 +9,14 @@ document.querySelectorAll('[data-i18n-title]').forEach((el) => { el.title = t(el
 const listEl = document.getElementById('list');
 let activeTab = null;
 
+// Tabs: Videos / Settings
+document.querySelectorAll('.tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x === tab));
+    document.querySelectorAll('.tabpane').forEach((p) => { p.hidden = (p.id !== 'tab-' + tab.dataset.tab); });
+  });
+});
+
 // "Download selected" is a trigger: it starts every checked, not-yet-downloaded
 // row. Each downloads by its own URL (its own filename); it never becomes "open
 // folder". The header checkbox selects/clears all rows at once.
@@ -236,12 +244,16 @@ function render(videos) {
 
 document.getElementById('refresh').addEventListener('click', () => loadVideos(true));
 
-// Save-path setting
+// Settings: save folder + "use browser cookies" toggle
 const savePathInput = document.getElementById('savePath');
+const useCookiesInput = document.getElementById('useCookies');
 const saveStatus = document.getElementById('saveStatus');
-chrome.storage.sync.get('savePath', ({ savePath }) => { savePathInput.value = savePath || ''; });
+chrome.storage.sync.get(['savePath', 'useCookies'], ({ savePath, useCookies }) => {
+  savePathInput.value = savePath || '';
+  useCookiesInput.checked = !!useCookies;
+});
 document.getElementById('save').addEventListener('click', () => {
-  chrome.storage.sync.set({ savePath: savePathInput.value.trim() }, () => {
+  chrome.storage.sync.set({ savePath: savePathInput.value.trim(), useCookies: useCookiesInput.checked }, () => {
     saveStatus.textContent = t('savedStatus');
     setTimeout(() => { saveStatus.textContent = ''; }, 1500);
   });

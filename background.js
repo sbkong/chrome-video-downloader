@@ -165,6 +165,10 @@ async function recordMedia(tabId, url) {
   arr.push({ url });
   while (arr.length > 20) arr.shift();
   await chrome.storage.session.set({ [key]: arr });
+  // Tell the tab a stream URL just appeared, so a blob/MSE badge that resolved to
+  // a page-URL fallback (before this manifest was sniffed) can re-key to it and
+  // pick up a matching finished download.
+  chrome.tabs.sendMessage(tabId, { action: 'mediaFound', url }).catch(() => {});
 }
 
 chrome.webRequest.onBeforeRequest.addListener((d) => {
@@ -185,7 +189,7 @@ function processQueue() {
 }
 
 async function startDownload(url, referer, tabId, onDone) {
-  const { savePath } = await chrome.storage.sync.get('savePath');
+  const { savePath, useCookies } = await chrome.storage.sync.get(['savePath', 'useCookies']);
   const S = (o) => setDL(url, o, tabId);
 
   let released = false;
@@ -239,7 +243,7 @@ async function startDownload(url, referer, tabId, onDone) {
   });
 
   try {
-    port.postMessage({ url, savePath: savePath || '', referer: referer || '', format: 'best' });
+    port.postMessage({ url, savePath: savePath || '', referer: referer || '', cookies: !!useCookies, format: 'best' });
   } catch (e) {
     S({ state: 'error', message: String(e) });
     flashBadge('ERR', '#c62828');
