@@ -1,12 +1,50 @@
-// Ctrl+Alt+Click on a video hands a URL to the local yt-dlp host (via background).
+// Modifier+Click on a video hands a URL to the local yt-dlp host (via background).
 // Direct http(s) media -> that URL; blob:/MSE -> the page URL (yt-dlp extracts).
-document.addEventListener('click', function (event) {
-  if (!event.ctrlKey || !event.altKey) return;
+// The modifier combo is configurable in the popup (default Ctrl+Alt).
+let clickMod = 'ctrl+alt';
+let clickButton = 'left';
+let shortcutEnabled = true;
+let badgeEnabled = true; // show the on-video hover button
+chrome.storage.sync.get(['clickMod', 'clickButton', 'shortcutEnabled', 'badgeEnabled'], ({ clickMod: cm, clickButton: cb, shortcutEnabled: se, badgeEnabled: be }) => {
+  if (cm) clickMod = cm;
+  if (cb) clickButton = cb;
+  if (se !== undefined) shortcutEnabled = se !== false;
+  if (be !== undefined) badgeEnabled = be !== false;
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'sync') return;
+  if (changes.clickMod) clickMod = changes.clickMod.newValue || 'ctrl+alt';
+  if (changes.clickButton) clickButton = changes.clickButton.newValue || 'left';
+  if (changes.shortcutEnabled) shortcutEnabled = changes.shortcutEnabled.newValue !== false;
+  if (changes.badgeEnabled) { badgeEnabled = changes.badgeEnabled.newValue !== false; scheduleBadges(); }
+});
+
+function modMatches(e) {
+  const need = { ctrl: false, alt: false, shift: false, meta: false };
+  clickMod.split('+').forEach((k) => { if (k in need) need[k] = true; });
+  if (!(need.ctrl || need.alt || need.shift || need.meta)) return false; // never fire on a plain click
+  return e.ctrlKey === need.ctrl && e.altKey === need.alt && e.shiftKey === need.shift && e.metaKey === need.meta;
+}
+
+function handleShortcut(event) {
+  if (!shortcutEnabled) return;
+  if (!modMatches(event)) retu/rn;
   const video = findVideo(event);
   if (!video) return;
   event.preventDefault();
   event.stopPropagation();
   triggerDownload(video);
+}
+
+// Left-click shortcut fires on 'click'; right-click on 'contextmenu' (which also
+// lets us suppress the browser menu when the combo matches).
+document.addEventListener('click', function (event) {
+  if (clickButton !== 'left') return;
+  handleShortcut(event);
+}, true);
+document.addEventListener('contextmenu', function (event) {
+  if (clickButton !== 'right') return;
+  handleShortcut(event);
 }, true);
 
 // Start a download for one <video>. Plain http(s) media -> that URL; blob:/MSE ->
@@ -260,6 +298,7 @@ function applyBadgeStatus(s) {
 
 function positionBadges() {
   vdlScheduled = false;
+  if (!badgeEnabled) { vdlBadges.forEach((b) => { b.style.display = 'none'; }); return; }
   const vids = document.querySelectorAll('video');
   const live = new Set();
   const rects = new Map();

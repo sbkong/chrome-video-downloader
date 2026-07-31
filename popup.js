@@ -244,16 +244,86 @@ function render(videos) {
 
 document.getElementById('refresh').addEventListener('click', () => loadVideos(true));
 
-// Settings: save folder + "use browser cookies" toggle
+// Settings: save folder + click shortcut + cookies. The shortcut is captured by
+// holding modifier keys and left/right-clicking the field, and auto-saves so it
+// applies immediately (no separate Save needed).
 const savePathInput = document.getElementById('savePath');
 const useCookiesInput = document.getElementById('useCookies');
+const shortcutEnabledInput = document.getElementById('shortcutEnabled');
+const badgeEnabledInput = document.getElementById('badgeEnabled');
+const captureEl = document.getElementById('shortcutCapture');
 const saveStatus = document.getElementById('saveStatus');
-chrome.storage.sync.get(['savePath', 'useCookies'], ({ savePath, useCookies }) => {
-  savePathInput.value = savePath || '';
-  useCookiesInput.checked = !!useCookies;
+
+// The on-video hover button toggle applies immediately (auto-save).
+badgeEnabledInput.addEventListener('change', () => {
+  chrome.storage.sync.set({ badgeEnabled: badgeEnabledInput.checked });
 });
+
+const MOD_ORDER = ['ctrl', 'alt', 'shift', 'meta'];
+const MOD_LABEL = { ctrl: 'Ctrl', alt: 'Alt', shift: 'Shift', meta: 'Meta' };
+const comboLabel = (mods) => mods.map((m) => MOD_LABEL[m]).join(' + ');
+const modsFromEvent = (e) => MOD_ORDER.filter((m) => ({ ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey })[m]);
+
+let clickModMods = ['ctrl', 'alt'];
+let clickButton = 'left';
+let flashTimer = null;
+
+const buttonLabel = () => t(clickButton === 'right' ? 'clickRight' : 'clickLeft');
+const fullLabel = () => comboLabel(clickModMods) + ' + ' + buttonLabel();
+
+function renderShortcut() {
+  const enabled = shortcutEnabledInput.checked;
+  captureEl.classList.toggle('disabled', !enabled);
+  captureEl.classList.remove('capturing');
+  captureEl.textContent = clickModMods.length ? fullLabel() : t('shortcutCapturePlaceholder');
+  const usageEl = document.querySelector('.usage');
+  if (usageEl) {
+    usageEl.textContent = (enabled && clickModMods.length)
+      ? t('usage').replace('{combo}', fullLabel())
+      : t('usageNoShortcut');
+  }
+}
+
+function persistShortcut() {
+  chrome.storage.sync.set({ clickMod: clickModMods.join('+'), clickButton: clickButton, shortcutEnabled: shortcutEnabledInput.checked });
+}
+
+// One-shot capture: hold the modifier(s) and left/right-click the field.
+captureEl.addEventListener('mousedown', (e) => {
+  if (!shortcutEnabledInput.checked) return;
+  e.preventDefault();
+  if (e.button === 1) return; // ignore middle click
+  const mods = modsFromEvent(e);
+  if (!mods.length) { // a modifier is required — keep the current value, hint briefly
+    captureEl.classList.add('capturing');
+    captureEl.textContent = t('shortcutCaptureActive');
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(renderShortcut, 1300);
+    return;
+  }
+  clickModMods = mods;
+  clickButton = (e.button === 2) ? 'right' : 'left';
+  renderShortcut();
+  persistShortcut();
+});
+captureEl.addEventListener('contextmenu', (e) => e.preventDefault()); // capture right-click without a menu
+shortcutEnabledInput.addEventListener('change', () => { renderShortcut(); persistShortcut(); });
+
+chrome.storage.sync.get(['savePath', 'clickMod', 'clickButton', 'shortcutEnabled', 'badgeEnabled', 'useCookies'], ({ savePath, clickMod, clickButton: cb, shortcutEnabled, badgeEnabled, useCookies }) => {
+  savePathInput.value = savePath || '';
+  clickModMods = (clickMod || 'ctrl+alt').split('+').filter(Boolean);
+  clickButton = cb || 'left';
+  shortcutEnabledInput.checked = (shortcutEnabled !== false); // default on
+  badgeEnabledInput.checked = (badgeEnabled !== false);       // default on
+  useCookiesInput.checked = !!useCookies;
+  renderShortcut();
+});
+
 document.getElementById('save').addEventListener('click', () => {
-  chrome.storage.sync.set({ savePath: savePathInput.value.trim(), useCookies: useCookiesInput.checked }, () => {
+  chrome.storage.sync.set({
+    savePath: savePathInput.value.trim(),
+    useCookies: useCookiesInput.checked
+  }, () => {
     saveStatus.textContent = t('savedStatus');
     setTimeout(() => { saveStatus.textContent = ''; }, 1500);
   });

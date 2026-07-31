@@ -32,10 +32,16 @@
     label { display: block; font-weight: 600; margin-bottom: 6px; }
     input[type="text"] { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid #ccc; border-radius: 5px; font-size: 13px; }
     input[type="text"]:focus { outline: none; border-color: #E53935; }
+    select { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid #ccc; border-radius: 5px; font-size: 13px; margin-bottom: 10px; background: #fff; }
+    select:focus { outline: none; border-color: #E53935; }
     .hint { color: #777; font-size: 11px; line-height: 1.5; margin: 8px 0 10px; }
     .hint code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; }
     .toggle { display: flex; align-items: center; gap: 6px; font-weight: 400; cursor: pointer; user-select: none; margin: 4px 0 2px; }
     .toggle input { width: 15px; height: 15px; cursor: pointer; accent-color: #E53935; }
+    .capture { box-sizing: border-box; width: 100%; padding: 8px 9px; margin: 4px 0 8px; border: 1px dashed #bbb; border-radius: 5px; font-size: 13px; color: #333; background: #fafafa; cursor: pointer; user-select: none; text-align: center; }
+    .capture:focus { outline: none; }
+    .capture.capturing { border-style: solid; border-color: #E53935; background: #fff5f5; color: #E53935; }
+    .capture.disabled { opacity: .45; pointer-events: none; }
     .head-actions { display: flex; gap: 6px; }
     .head-left { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 400; cursor: pointer; user-select: none; }
     #selectAll { width: 15px; height: 15px; cursor: pointer; accent-color: #E53935; }
@@ -73,7 +79,7 @@
     </div>
     <span id="pageErr"></span>
     <ul id="list"></ul>
-    <div class="usage" data-i18n="usage"></div>
+    <div class="usage"></div>
   </div>
 
   <div id="tab-settings" class="tabpane" hidden>
@@ -81,6 +87,9 @@
       <label for="savePath" data-i18n="savePathLabel"></label>
       <input type="text" id="savePath" data-i18n-ph="savePathPlaceholder">
       <div class="hint" data-i18n-html="savePathHint"></div>
+      <label class="toggle"><input type="checkbox" id="shortcutEnabled"> <span data-i18n="shortcutEnabledLabel"></span></label>
+      <div id="shortcutCapture" class="capture" tabindex="0"></div>
+      <label class="toggle"><input type="checkbox" id="badgeEnabled"> <span data-i18n="badgeEnabledLabel"></span></label>
       <label class="toggle"><input type="checkbox" id="useCookies"> <span data-i18n="useCookiesLabel"></span></label>
       <div class="hint" data-i18n="useCookiesHint"></div>
       <button id="save" data-i18n="saveButton"></button>
