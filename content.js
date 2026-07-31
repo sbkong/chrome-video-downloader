@@ -28,7 +28,7 @@ function modMatches(e) {
 
 function handleShortcut(event) {
   if (!shortcutEnabled) return;
-  if (!modMatches(event)) retu/rn;
+  if (!modMatches(event)) return;
   const video = findVideo(event);
   if (!video) return;
   event.preventDefault();
