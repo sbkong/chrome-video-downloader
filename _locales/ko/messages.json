@@ -35,5 +35,8 @@
   "pageItem": { "message": "전체 다운로드" },
   "downloadSelected": { "message": "선택 다운로드" },
   "selectAllTitle": { "message": "전체 선택/해제" },
-  "streamItem": { "message": "스트리밍 (페이지에서 추출)" }
+  "streamItem": { "message": "스트리밍 (페이지에서 추출)" },
+  "supportNote": { "message": "이 확장은 무료이며 모든 기능이 제한 없이 열려 있습니다." },
+  "supportKofi": { "message": "후원하기" },
+  "supportSource": { "message": "소스 보기" }
 }

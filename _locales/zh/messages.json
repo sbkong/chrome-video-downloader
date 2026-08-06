@@ -35,5 +35,8 @@
   "pageItem": { "message": "全部下载" },
   "downloadSelected": { "message": "下载所选" },
   "selectAllTitle": { "message": "全选 / 取消" },
-  "streamItem": { "message": "流媒体（从页面提取）" }
+  "streamItem": { "message": "流媒体（从页面提取）" },
+  "supportNote": { "message": "本扩展完全免费，所有功能均无限制。" },
+  "supportKofi": { "message": "请我喝杯咖啡" },
+  "supportSource": { "message": "源代码" }
 }

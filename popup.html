@@ -56,6 +56,11 @@
     .tab:hover { background: #f5f5f5; }
     .tab.active { color: #E53935; border-bottom-color: #E53935; }
     #tab-settings .settings { margin-top: 0; border-top: none; padding-top: 0; }
+
+    .support { color: #999; font-size: 11px; margin-top: 14px; border-top: 1px solid #eee; padding-top: 10px; line-height: 1.7; }
+    .support a { color: #999; text-decoration: none; border-bottom: 1px solid #e0e0e0; }
+    .support a:hover { color: #E53935; border-bottom-color: #E53935; }
+    .support .sep { color: #ddd; margin: 0 3px; }
   </style>
 </head>
 <body>
@@ -94,6 +99,15 @@
       <div class="hint" data-i18n="useCookiesHint"></div>
       <button id="save" data-i18n="saveButton"></button>
       <div id="saveStatus"></div>
+    </div>
+
+    <div class="support">
+      <span data-i18n="supportNote"></span><br>
+      <a href="https://ko-fi.com/sbkong" target="_blank" rel="noopener noreferrer" data-i18n="supportKofi"></a>
+      <span class="sep">·</span>
+      <a href="https://github.com/sponsors/sbkong" target="_blank" rel="noopener noreferrer">GitHub Sponsors</a>
+      <span class="sep">·</span>
+      <a href="https://github.com/sbkong/chrome-video-downloader" target="_blank" rel="noopener noreferrer" data-i18n="supportSource"></a>
     </div>
   </div>
 

@@ -59,3 +59,10 @@ popup has two tabs: **Videos** and **Settings**. Downloads run one at a time.
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
+
+## Support
+
+This extension is free, with every feature unlocked, and it stays that way. If it
+saved you some time, you can support it via
+[GitHub Sponsors](https://github.com/sponsors/sbkong) or
+[Ko-fi](https://ko-fi.com/sbkong).

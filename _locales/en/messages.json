@@ -35,5 +35,8 @@
   "pageItem": { "message": "Download all" },
   "downloadSelected": { "message": "Download selected" },
   "selectAllTitle": { "message": "Select / clear all" },
-  "streamItem": { "message": "Stream (extract from page)" }
+  "streamItem": { "message": "Stream (extract from page)" },
+  "supportNote": { "message": "Free, with every feature unlocked. Always." },
+  "supportKofi": { "message": "Buy me a coffee" },
+  "supportSource": { "message": "Source" }
 }
