@@ -32,7 +32,10 @@ $manifest = [ordered]@{
   allowed_origins = @('chrome-extension://' + $ExtensionId + '/')
 }
 $manifestPath = Join-Path $here ($hostName + '.json')
-($manifest | ConvertTo-Json -Depth 5) | Set-Content -Path $manifestPath -Encoding utf8
+# Must be BOM-less UTF-8: Windows PowerShell's -Encoding utf8 emits a BOM, which
+# Chrome rejects when parsing the native host manifest.
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 5), $utf8NoBom)
 Write-Host "Wrote $manifestPath"
 
 $chromeKey = 'HKCU\Software\Google\Chrome\NativeMessagingHosts\' + $hostName

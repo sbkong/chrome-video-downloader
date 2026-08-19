@@ -61,10 +61,30 @@
     .support a { color: #999; text-decoration: none; border-bottom: 1px solid #e0e0e0; }
     .support a:hover { color: #E53935; border-bottom-color: #E53935; }
     .support .sep { color: #ddd; margin: 0 3px; }
+
+    #hostBanner { border: 1px solid #ffcdd2; background: #fff5f5; border-radius: 6px; padding: 10px; margin-bottom: 12px; }
+    #hostBanner .hb-title { font-weight: 700; color: #c62828; margin-bottom: 4px; }
+    #hostBanner .hb-body { color: #666; font-size: 11px; line-height: 1.6; margin-bottom: 8px; }
+    #hostBanner code { display: block; background: #fff; border: 1px solid #f0dcdc; border-radius: 4px; padding: 6px 7px; margin-bottom: 8px; font-family: Consolas, monospace; font-size: 10px; line-height: 1.5; word-break: break-all; user-select: all; }
+    #hostBanner .hb-actions { display: flex; gap: 6px; }
+    #recheckHost { background: #666; } #recheckHost:hover { background: #555; }
   </style>
 </head>
 <body>
   <h1 data-i18n="popupHeading"></h1>
+
+  <!-- Shown only when the native host is not reachable. Registration cannot be
+       automated (an extension may not launch a local program), so this hands the
+       user the exact command instead of making them hunt for install.ps1. -->
+  <div id="hostBanner" hidden>
+    <div class="hb-title" data-i18n="hostBannerTitle"></div>
+    <div class="hb-body" data-i18n="hostBannerBody"></div>
+    <code id="hostCmd"></code>
+    <div class="hb-actions">
+      <button id="copyCmd" class="small" data-i18n="hostBannerCopy"></button>
+      <button id="recheckHost" class="small" data-i18n="hostBannerRecheck"></button>
+    </div>
+  </div>
 
   <div class="tabs">
     <button class="tab active" data-tab="videos" data-i18n="tabVideos"></button>

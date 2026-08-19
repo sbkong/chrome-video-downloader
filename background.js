@@ -69,6 +69,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.storage.session.get(key).then((g) => sendResponse(g[key] || []));
     return true;
   }
+  if (request.action === 'checkHost') {
+    hostReachable().then((ok) => sendResponse({ ok }));
+    return true;
+  }
   if (request.action === 'reveal') {
     try {
       const port = chrome.runtime.connectNative(HOST);
@@ -104,6 +108,30 @@ function resolveStreamUrl(tabId) {
   return chrome.storage.session.get(mediaKey(tabId)).then((g) => {
     const arr = g[mediaKey(tabId)] || [];
     return arr.length ? arr[arr.length - 1].url : null;
+  });
+}
+
+// Cheap liveness probe for the popup's banner: connect and ask the host to check
+// an empty path list. A reply means it is registered AND runnable; a throw or a
+// disconnect means the user still has to run native/install.ps1 once.
+// Skipped while a download holds the host — spawning a second host process would
+// collide with it (see the queue note above), and a running download is already
+// proof the host is fine.
+function hostReachable() {
+  if (busy) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let done = false;
+    let port;
+    const finish = (ok) => {
+      if (done) return; done = true;
+      try { port.disconnect(); } catch (e) {}
+      resolve(ok);
+    };
+    try { port = chrome.runtime.connectNative(HOST); } catch (e) { resolve(false); return; }
+    port.onMessage.addListener(() => finish(true));
+    port.onDisconnect.addListener(() => finish(false));
+    try { port.postMessage({ cmd: 'exists', paths: [] }); } catch (e) { finish(false); }
+    setTimeout(() => finish(false), 5000);
   });
 }
 

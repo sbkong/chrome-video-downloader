@@ -219,6 +219,9 @@ function applyStatus(btn, s) {
       btn._status.classList.add('err');
       btn._status.textContent = (s.message || t('stError')) + (s.hostMissing ? ' ' + t('hostMissingHint') : '');
     }
+    // A download that died on a missing host is proof enough — surface the banner
+    // even if the probe on open had said otherwise.
+    if (s.hostMissing) hostBanner.hidden = false;
   }
   updateSelectionUI();
 }
@@ -330,5 +333,43 @@ document.getElementById('save').addEventListener('click', () => {
 });
 savePathInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('save').click(); });
 
+// ---- Native host banner --------------------------------------------------
+// The host must be registered once per machine; an extension cannot launch a
+// local program, so this is the one step that stays manual. Probe on open so the
+// user learns it here instead of after a download fails. The extension has no way
+// to know its own folder on disk, hence the placeholder in the command — the real
+// path is the one chrome://extensions shows for this extension.
+const hostBanner = document.getElementById('hostBanner');
+const copyCmdBtn = document.getElementById('copyCmd');
+const hostCmdEl = document.getElementById('hostCmd');
+const INSTALL_CMD = 'powershell -NoProfile -ExecutionPolicy Bypass -File "' + t('hostBannerFolderToken') + '\\native\\install.ps1"';
+
+hostCmdEl.textContent = INSTALL_CMD;
+
+function checkHost() {
+  chrome.runtime.sendMessage({ action: 'checkHost' }, (r) => {
+    void chrome.runtime.lastError;
+    hostBanner.hidden = !!(r && r.ok);
+  });
+}
+
+copyCmdBtn.addEventListener('click', () => {
+  const flash = () => {
+    copyCmdBtn.textContent = t('hostBannerCopied');
+    setTimeout(() => { copyCmdBtn.textContent = t('hostBannerCopy'); }, 1500);
+  };
+  navigator.clipboard.writeText(INSTALL_CMD).then(flash, () => {
+    // Clipboard blocked — select the text so Ctrl+C still works.
+    const r = document.createRange();
+    r.selectNodeContents(hostCmdEl);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  });
+});
+
+document.getElementById('recheckHost').addEventListener('click', checkHost);
+
 chrome.runtime.onMessage.addListener((msg) => { if (msg && msg.action === 'status') onStatus(msg.status); });
+checkHost();
 loadVideos();
