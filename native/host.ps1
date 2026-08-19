@@ -1,6 +1,7 @@
 # Native messaging host (Windows PowerShell, no Python needed).
 # Reads { "url", "savePath" } from the extension over stdin (4-byte LE length +
-# UTF-8 JSON), runs the bundled yt-dlp.exe (+ ffmpeg.exe) to download, and streams
+# UTF-8 JSON), runs the bundled yt-dlp.exe (+ ffmpeg.exe to merge, deno.exe as the
+# JavaScript runtime YouTube extraction needs) to download, and streams
 # progress/done/error back using the same framing.
 
 $ErrorActionPreference = 'Stop'
@@ -117,6 +118,23 @@ function Invoke-Download($msg) {
 
   $ytArgs = @('--newline', '--no-playlist')
   if (Test-Path (Join-Path $bin 'ffmpeg.exe')) { $ytArgs += @('--ffmpeg-location', $bin) }
+
+  # YouTube handed out format URLs that need its "n"/signature JS challenge solved
+  # first. yt-dlp needs a JavaScript runtime for that; it only auto-detects deno on
+  # PATH, so point it at the bundled copy. Without it yt-dlp silently drops the
+  # challenge-protected formats and falls back to the android_vr client, whose URLs
+  # now fail with HTTP 403 Forbidden.
+  $deno = Join-Path $bin 'deno.exe'
+  if (Test-Path $deno) { $ytArgs += @('--js-runtimes', ('deno:' + $deno)) }
+  else { Log 'WARNING: bin\deno.exe missing - YouTube downloads will likely fail (run fetch-binaries.ps1)' }
+
+  # Prefer the web_embedded player client for YouTube. The default clients now
+  # return either SABR-only formats with no direct URL, or formats gated behind a
+  # GVS PO token, and end up 403ing; web_embedded still serves plain HTTPS formats
+  # once the JS challenge above is solved. "default" stays as a fallback so other
+  # clients can still fill in when web_embedded has nothing (this arg is ignored
+  # for non-YouTube sites).
+  $ytArgs += @('--extractor-args', 'youtube:player_client=web_embedded,default')
   if ($msg.referer) { $ytArgs += @('--referer', [string]$msg.referer) }
 
   # Optionally use the logged-in Chrome session's cookies so member-only /

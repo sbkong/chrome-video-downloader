@@ -5,8 +5,9 @@ local native messaging host, which runs **yt-dlp** (+ **ffmpeg** for merging) an
 saves the file. This is what makes real sites work — Vimeo, most HLS/DASH
 players, and the 1000+ sites yt-dlp supports.
 
-**No tools to install.** `yt-dlp.exe` and `ffmpeg.exe` are bundled in `bin\`, and
-the host runs on Windows' built-in PowerShell. You only register it once.
+**No tools to install.** `yt-dlp.exe`, `ffmpeg.exe` and `deno.exe` are bundled in
+`bin\`, and the host runs on Windows' built-in PowerShell. You only register it
+once.
 
 ## Install
 
@@ -34,6 +35,7 @@ To remove: double-click `uninstall.bat`.
 | File | Purpose |
 |------|---------|
 | `bin\yt-dlp.exe`, `bin\ffmpeg.exe` | Bundled download engine + muxer (no install needed). |
+| `bin\deno.exe` | JavaScript runtime yt-dlp uses to solve YouTube's JS challenges. |
 | `host.ps1` | PowerShell native messaging host; runs yt-dlp, streams progress. |
 | `host.bat` | Launcher registered with the browser (runs host.ps1). |
 | `install.bat` / `install.ps1` | Register the host (Chrome + Edge, current user). |
@@ -47,13 +49,22 @@ To remove: double-click `uninstall.bat`.
 automatically: at most once every 24 hours (before a download) it runs yt-dlp's
 built-in self-update (`yt-dlp.exe -U`). No user action needed; if there's no
 network it just logs and continues. A timestamp marker `bin\.last_update`
-throttles the check. `ffmpeg` rarely needs updating; run `fetch-binaries.ps1` to
-refresh it.
+throttles the check. `ffmpeg` and `deno` rarely need updating; run
+`fetch-binaries.ps1` to refresh them (it skips whichever is already present —
+delete the file first to force a re-download).
+
+YouTube needs more than yt-dlp alone. Its format URLs carry an `n` parameter that
+has to be de-obfuscated by running YouTube's own JavaScript, so the host passes
+`--js-runtimes deno:bin\deno.exe`; without a JS runtime yt-dlp drops those formats
+and falls back to ones that fail with `HTTP Error 403: Forbidden`. For the same
+reason the host pins the `web_embedded` player client, since yt-dlp's default
+clients now return SABR-only or PO-token-gated formats that also 403.
 
 ## Notes / limits
 
 - Windows only (uses PowerShell + `.bat`). macOS/Linux would need a shell host.
 - The host still must be **registered once per machine** (`install.bat`) — a
   browser extension cannot launch a local program without this.
-- `bin\` is ~115 MB (mostly ffmpeg). To rebuild it, run `fetch-binaries.ps1`.
+- `bin\` is ~215 MB (mostly ffmpeg and deno). To rebuild it, run
+  `fetch-binaries.ps1`.
 - Downloading may violate a site's Terms of Service; use responsibly.

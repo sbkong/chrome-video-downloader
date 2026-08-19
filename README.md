@@ -10,8 +10,9 @@ bundled native host does the actual download and merge — so real sites work
 1. `chrome://extensions` -> enable Developer mode -> **Load unpacked** -> this folder.
 2. Open the `native` folder and **double-click `install.bat`**, then reload the extension.
 
-Nothing else to install: `yt-dlp.exe` and `ffmpeg.exe` are bundled in `native/bin`
-and the host runs on built-in PowerShell. See [`native/README.md`](native/README.md).
+Nothing else to install: `yt-dlp.exe`, `ffmpeg.exe` and `deno.exe` (the JS runtime
+yt-dlp needs for YouTube) are bundled in `native/bin` and the host runs on built-in
+PowerShell. See [`native/README.md`](native/README.md).
 
 ## Usage
 
