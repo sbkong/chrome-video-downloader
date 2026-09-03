@@ -71,6 +71,9 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
   }
   // Background progress broadcast -> update the matching on-page badge.
   if (req && req.action === 'status') { applyBadgeStatus(req.status); }
+  // Same-document (SPA) navigation in this tab -> the badges now sit on a
+  // different video, so drop the previous target's state and re-resolve.
+  if (req && req.action === 'navigated') { handleNavigation(); return; }
   // A stream manifest was (re)sniffed for this tab -> re-key blob/MSE badges to it
   // and re-hydrate (fixes the reload race where the badge resolved before the
   // page had re-fetched its manifest).
@@ -349,8 +352,36 @@ function scheduleBadges() {
   requestAnimationFrame(positionBadges);
 }
 
+// ---- SPA navigation ------------------------------------------------------
+// Sites like YouTube swap videos without reloading the page, reusing the same
+// <video> element. A badge would then keep the PREVIOUS video's download target
+// (and its "open folder" state) until a manual reload. On every page-URL change
+// we forget each badge's target and resolve it again for the new video.
+let lastPageUrl = location.href;
+
+function handleNavigation() {
+  lastPageUrl = location.href;
+  vdlBadges.forEach((b, video) => {
+    const src = videoSrc(video);
+    if (src && /^https?:/i.test(src) && src === b.dataset.dlurl) return; // same media, keep its state
+    b.dataset.dlurl = '';
+    b.dataset.state = 'idle';
+    b.dataset.percent = '';
+    b.dataset.path = '';
+    renderBadge(b);
+    initBadge(b, video); // re-key to the new src / manifest / page URL, then re-hydrate
+  });
+  scheduleBadges();
+}
+
+// The background message above is the reliable signal; this catches the rest
+// (history navigation, hash changes, and pushState the browser reports late).
+function checkNavigation() { if (location.href !== lastPageUrl) handleNavigation(); }
+addEventListener('popstate', checkNavigation, true);
+addEventListener('hashchange', checkNavigation, true);
+
 addEventListener('mousemove', (e) => { ptrX = e.clientX; ptrY = e.clientY; scheduleBadges(); }, true);
 addEventListener('scroll', scheduleBadges, true);
 addEventListener('resize', scheduleBadges, true);
-try { new MutationObserver(scheduleBadges).observe(document.documentElement, { childList: true, subtree: true }); } catch (e) {}
+try { new MutationObserver(() => { checkNavigation(); scheduleBadges(); }).observe(document.documentElement, { childList: true, subtree: true }); } catch (e) {}
 scheduleBadges();

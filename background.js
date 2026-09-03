@@ -207,6 +207,17 @@ chrome.webRequest.onBeforeRequest.addListener((d) => {
 
 chrome.tabs.onRemoved.addListener((id) => { chrome.storage.session.remove(mediaKey(id)); });
 
+// A tab's URL changed. Covers same-document (SPA) navigation too, which never
+// issues a main_frame request: the previously sniffed manifests belong to the
+// video the user just left, so drop them, then tell the tab so its on-page
+// badges stop pointing at the old download target.
+chrome.tabs.onUpdated.addListener((tabId, info) => {
+  if (!info.url) return;
+  chrome.storage.session.remove(mediaKey(tabId)).then(() => {
+    chrome.tabs.sendMessage(tabId, { action: 'navigated', url: info.url }).catch(() => {});
+  });
+});
+
 // ---- Download queue -------------------------------------------------------
 function processQueue() {
   if (busy) return;
