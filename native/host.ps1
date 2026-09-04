@@ -13,13 +13,22 @@ try { if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Force -Path 
 
 # Media URLs routinely carry CDN auth in the query string (tokens, signatures,
 # expiry windows). These logs are plain files that sit on disk, so scrub those
-# values before anything is written. The rest of the URL is kept - that is what
-# makes a log worth having - and ordinary identifiers (?v=, &list=) are untouched.
-$SECRET_PARAM_RE = '(?i)((?:token|sig|signature|hmac|key|secret|auth|authorization|password|passwd|session|sid|cookie|policy|credential|expires?|access_token|id_token|refresh_token|Key-Pair-Id|X-Amz-[A-Za-z0-9-]+|__hdnea__)=)[^&\s"'']*'
+# values before anything is written.
+#
+# This is a KEEP-list, not a list of names to scrub: every CDN invents its own
+# parameter names (__hdnea__, hdnts, __token__, ei, nonce, ...) and a denylist
+# silently misses the next one. Anything not named here loses its value; the
+# parameter name, the host and the path stay, which is what makes a log useful.
+$KEEP_PARAMS = @('v', 'id', 'vid', 'list', 'index', 'p', 'page', 'start', 'end', 't', 'time',
+                 'lang', 'format', 'quality', 'res', 'type', 'mime', 'itag')
 
 function Redact([string]$m) {
   if ([string]::IsNullOrEmpty($m)) { return $m }
-  return ($m -replace $SECRET_PARAM_RE, '$1<redacted>')
+  return [regex]::Replace($m, '(?<=[?&])([^=&\s]+)=([^&\s]*)', {
+    param($match)
+    if ($KEEP_PARAMS -contains $match.Groups[1].Value.ToLowerInvariant()) { return $match.Value }
+    return ($match.Groups[1].Value + '=<redacted>')
+  })
 }
 
 function Log([string]$m) {
@@ -34,12 +43,28 @@ function Log([string]$m) {
 function Remove-OldLogs {
   try {
     $cutoff = (Get-Date).AddDays(-14)
-    Get-ChildItem -Path $logDir -Filter '*.log' -File |
+    Get-ChildItem -LiteralPath $logDir -Filter '*.log' -File |
       Where-Object { $_.LastWriteTime -lt $cutoff } |
       ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
   } catch {}
 }
+$COOKIE_PREFIX = 'vdl_ck_'
+
+# A crash between writing and deleting would leave plaintext cookies behind, so
+# clear leftovers at startup. Only files older than an hour: a reveal or a disk
+# check spawns its own host process while a download is running, and that process
+# must not delete the cookie file the running download is holding.
+function Remove-StaleCookieFiles {
+  try {
+    $cutoff = (Get-Date).AddHours(-1)
+    Get-ChildItem -LiteralPath $env:TEMP -Filter ($COOKIE_PREFIX + '*.txt') -File |
+      Where-Object { $_.LastWriteTime -lt $cutoff } |
+      ForEach-Object { try { Remove-Item -LiteralPath $_.FullName -Force } catch {} }
+  } catch {}
+}
+
 Remove-OldLogs
+Remove-StaleCookieFiles
 Log '--- host started ---'
 
 $stdin  = [Console]::OpenStandardInput()
@@ -77,47 +102,83 @@ function Send-Message($obj) {
 # Keep yt-dlp current without any user action: at most once per 24h, run its
 # built-in self-update (-U). This is what handles sites changing / yt-dlp needing
 # a newer version, while the bundle stays simple. ffmpeg rarely needs updating.
+# Returns $false only when the binary on disk has been positively identified as
+# not matching its own claimed version; the caller then refuses to run it.
 function Update-YtDlpIfStale {
   try {
-    if (-not (Test-Path $ytdlp)) { return }
+    if (-not (Test-Path $ytdlp)) { return $true }
     $marker = Join-Path $bin '.last_update'
     if (Test-Path $marker) {
       $age = (Get-Date) - (Get-Item $marker).LastWriteTime
-      if ($age.TotalHours -lt 24) { return }
+      if ($age.TotalHours -lt 24) { return $true }
     }
     Log 'yt-dlp: checking for update (-U)...'
     $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     try { & $ytdlp -U 2>&1 | ForEach-Object { Log ('update> ' + [string]$_) } }
     finally { $ErrorActionPreference = $prev }
-    Test-YtDlpHash
+    $ok = Test-YtDlpHash
     Set-Content -Path $marker -Value (Get-Date -Format 'o') -Encoding ascii
-  } catch { Log ('update check failed: ' + $_.Exception.Message) }
+    return $ok
+  } catch { Log ('update check failed: ' + $_.Exception.Message); return $true }
 }
 
-# Check the yt-dlp.exe on disk against the SHA-256 the project publishes for its
-# latest release. yt-dlp's own updater verifies what it downloads before swapping
-# it in; this is a second, independent look, so a bad binary shows up in the log
-# instead of silently running. A mismatch only WARNS: it also happens innocently
-# when a newer release exists but -U has not run yet, and network trouble must
-# never block a download.
+# Check the yt-dlp.exe on disk against the SHA-256 the project publishes FOR THE
+# VERSION THAT BINARY REPORTS - not for the newest release. Comparing against
+# "latest" was useless: every time a new release came out the local file mismatched
+# for a perfectly innocent reason, so a real mismatch could not be told apart from
+# a stale copy. Pinned to the installed version, a mismatch means the file is not
+# what its own version claims to be, and we refuse to run it.
+#
+# Returns $true to proceed. A network failure or a missing digest also returns
+# $true: this must not turn a transient outage into a broken downloader. It cannot
+# stop someone who already has write access to bin\ (they could patch this script
+# too) - it exists to catch a bad or tampered update.
 function Test-YtDlpHash {
   try {
-    $r = Invoke-WebRequest -Uri 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS' `
+    $ver = (& $ytdlp --version 2>$null | Select-Object -First 1)
+    if ($ver) { $ver = ([string]$ver).Trim() }
+    if (-not ($ver -match '^[0-9][0-9.]*$')) { Log 'verify: yt-dlp version unreadable; check skipped'; return $true }
+
+    $r = Invoke-WebRequest -Uri ('https://github.com/yt-dlp/yt-dlp/releases/download/' + $ver + '/SHA2-256SUMS') `
            -UseBasicParsing -TimeoutSec 20
     $txt = if ($r.Content -is [byte[]]) { [System.Text.Encoding]::UTF8.GetString($r.Content) } else { [string]$r.Content }
     $want = ''
     foreach ($line in ($txt -split "`n")) {
       if ($line -match '^([0-9a-fA-F]{64})\s+yt-dlp\.exe\s*$') { $want = $Matches[1]; break }
     }
-    if (-not $want) { Log 'update: no published hash for yt-dlp.exe; verification skipped'; return }
+    if (-not $want) { Log ('verify: no published hash for ' + $ver + '; check skipped'); return $true }
+
     $have = (Get-FileHash -LiteralPath $ytdlp -Algorithm SHA256).Hash
     if ($have -eq $want.ToUpperInvariant()) {
-      Log ('update: yt-dlp.exe verified (' + $have.Substring(0, 16) + '...)')
-    } else {
-      Log ('WARNING: yt-dlp.exe does not match the published release hash (have ' +
-           $have.Substring(0, 16) + '..., published ' + $want.Substring(0, 16) + '...)')
+      Log ('verify: yt-dlp.exe ' + $ver + ' matches its published hash (' + $have.Substring(0, 16) + '...)')
+      return $true
     }
-  } catch { Log ('update: hash verification skipped (' + $_.Exception.Message + ')') }
+    Log ('SECURITY: yt-dlp.exe claims version ' + $ver + ' but does not match the hash published for it (have ' +
+         $have.Substring(0, 16) + '..., published ' + $want.Substring(0, 16) + '...) - refusing to run it')
+    return $false
+  } catch { Log ('verify: check skipped (' + $_.Exception.Message + ')'); return $true }
+}
+
+# The extension exports only the cookies for the site being downloaded and sends
+# them as Netscape text. yt-dlp accepts cookies as a FILE only, so write one, lock
+# it down to this user, and have the caller delete it the moment yt-dlp exits.
+# MozillaCookieJar is strict: LF line endings, real tabs, no BOM.
+function New-CookieFile([string]$text) {
+  $f = Join-Path $env:TEMP ($COOKIE_PREFIX + [System.Guid]::NewGuid().ToString('N') + '.txt')
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllText($f, ($text -replace "`r`n", "`n"), $utf8NoBom)
+  try {
+    $acl = Get-Acl -LiteralPath $f
+    $acl.SetAccessRuleProtection($true, $false)  # stop inheriting, so only what we add applies
+    $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+    $acl.SetAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($me, 'FullControl', 'Allow')))
+    Set-Acl -LiteralPath $f -AclObject $acl
+  } catch { Log ('cookie file ACL not applied: ' + $_.Exception.Message) }
+  return $f
+}
+
+function Remove-CookieFile([string]$f) {
+  if ($f) { try { Remove-Item -LiteralPath $f -Force } catch {} }
 }
 
 # A plain, directly-fetchable media file (not an HLS/DASH manifest or a webpage).
@@ -157,7 +218,10 @@ function Invoke-Download($msg) {
   if (-not $msg.url) { Send-Message @{ type = 'error'; message = 'no url' }; return }
   if (-not (Test-Path $ytdlp)) { Send-Message @{ type = 'error'; message = 'yt-dlp.exe missing in bin/' }; return }
 
-  Update-YtDlpIfStale
+  if (-not (Update-YtDlpIfStale)) {
+    Send-Message @{ type = 'error'; message = 'yt-dlp.exe does not match the hash published for its version. Refusing to run it - re-run native\fetch-binaries.ps1 to reinstall.' }
+    return
+  }
 
   # Build the output path. The "save folder" setting may contain {domain} and
   # {title} tokens, which map to yt-dlp output fields (so folders use yt-dlp's own
@@ -185,13 +249,17 @@ function Invoke-Download($msg) {
   $ytArgs += @('--extractor-args', 'youtube:player_client=web_embedded,default')
   if ($msg.referer) { $ytArgs += @('--referer', [string]$msg.referer) }
 
-  # Optionally use the logged-in Chrome session's cookies so videos a site only
-  # serves to a signed-in account download with the user's own access. NOTE this
-  # hands yt-dlp the ENTIRE Chrome cookie store, not just the target site's - the
-  # flag has no per-domain form. Off by default, both for that reason and because
-  # reading Chrome's cookie DB can fail (locked / app-bound encryption) and would
-  # then abort even ordinary downloads. Toggled in the popup.
-  if ($msg.cookies) { $ytArgs += @('--cookies-from-browser', 'chrome') }
+  # Cookies, when the user enabled them, arrive already scoped to this one site
+  # (see collectCookies in background.js). This replaced
+  # --cookies-from-browser chrome, which handed yt-dlp every cookie Chrome held
+  # and, on Chrome 127+, could not read them at all - the DB is locked while
+  # Chrome runs and the values are under app-bound encryption.
+  $cookieFile = $null
+  if ($msg.cookiesText) {
+    $cookieFile = New-CookieFile ([string]$msg.cookiesText)
+    $ytArgs += @('--cookies', $cookieFile)
+    Log ('using scoped cookie file (' + (([string]$msg.cookiesText) -split "`n").Count + ' lines)')
+  }
 
   # Prefer H.264 mp4 video + AAC (m4a) stereo audio, merged into mp4. The usual
   # "best" is VP9/webm + Opus audio, which is what makes files come out as
@@ -272,6 +340,7 @@ function Invoke-Download($msg) {
     }
   } finally {
     $ErrorActionPreference = $prevEAP
+    Remove-CookieFile $cookieFile
   }
 
   $code = $LASTEXITCODE
@@ -314,15 +383,22 @@ function Reveal-Path([string]$path) {
       Send-Message @{ type = 'revealed'; ok = $false; message = 'invalid path' }
       return
     }
+    $opened = $false
     if (Test-Path -LiteralPath $path -PathType Leaf) {
       Start-Process explorer.exe -ArgumentList ('/select,"' + $path + '"')
+      $opened = $true
     } else {
+      # Open the folder directly rather than building an explorer argument: a
+      # directory ending in a backslash (a drive root) would leave a trailing \"
+      # that Windows reads as an escaped quote, handing explorer a broken path.
       $dir = Split-Path -Parent $path
       if ($dir -and (Test-Path -LiteralPath $dir -PathType Container)) {
-        Start-Process explorer.exe -ArgumentList ('"' + $dir + '"')
+        Start-Process -FilePath $dir
+        $opened = $true
       }
     }
-    Send-Message @{ type = 'revealed'; ok = $true }
+    if (-not $opened) { Log 'reveal: nothing to open (the file and its folder are both gone)' }
+    Send-Message @{ type = 'revealed'; ok = $opened }
   } catch { Send-Message @{ type = 'revealed'; ok = $false; message = $_.Exception.Message } }
 }
 

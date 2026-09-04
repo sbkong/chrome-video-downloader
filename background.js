@@ -86,7 +86,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (ok) revealPath(request.path);
       else console.warn('[vid-dl] reveal refused for an unrecorded path');
       sendResponse({ ok });
-    });
+    }).catch(() => sendResponse({ ok: false })); // never leave the port hanging
     return true;
   }
 });
@@ -193,6 +193,56 @@ async function verifyDownloads() {
   return downloads;
 }
 
+// ---- Cookies -------------------------------------------------------------
+// Cookies for ONE site, not the whole jar. yt-dlp's --cookies-from-browser hands
+// it every cookie Chrome holds, and on Chrome 127+ it usually cannot read any of
+// them anyway: the cookie DB is locked while Chrome runs and the values are under
+// app-bound encryption. Asking the browser for just the cookies that would be sent
+// to this download is both far narrower and the only version that actually works.
+//
+// getAll({url}) is the right primitive - it returns exactly what a request to that
+// URL would carry, parent-domain cookies included. Do NOT try to derive a
+// registrable domain by hand: getAll({domain:'co.uk'}) would sweep up every
+// cookie under that suffix.
+async function collectCookies(url, referer) {
+  const urls = [url, referer].filter((u) => u && /^https?:/i.test(u));
+  const seen = new Set();
+  const out = [];
+  for (const u of urls) {
+    let list;
+    try { list = await chrome.cookies.getAll({ url: u }); } catch (e) { continue; }
+    (list || []).forEach((c) => {
+      const key = c.domain + '\t' + c.path + '\t' + c.name;
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(c);
+    });
+  }
+  return out.length ? toNetscape(out) : '';
+}
+
+// Netscape cookies.txt - the only shape yt-dlp's --cookies accepts. The magic
+// first line is mandatory (Python's MozillaCookieJar rejects a file without it),
+// the seven fields are TAB separated (spaces are the classic cause of "does not
+// look like a Netscape format cookies file"), and yt-dlp strips the #HttpOnly_
+// prefix itself. Chrome already reports domain cookies with a leading dot, so
+// c.domain goes through verbatim; hostOnly is the inverse of "include subdomains".
+function toNetscape(cookies) {
+  const lines = ['# Netscape HTTP Cookie File'];
+  cookies.forEach((c) => {
+    lines.push((c.httpOnly ? '#HttpOnly_' : '') + [
+      c.domain,
+      c.hostOnly ? 'FALSE' : 'TRUE',
+      c.path || '/',
+      c.secure ? 'TRUE' : 'FALSE',
+      c.session ? 0 : Math.floor(c.expirationDate || 0),
+      c.name,
+      c.value
+    ].join('\t'));
+  });
+  return lines.join('\n') + '\n';
+}
+
 // ---- Media (HLS/DASH manifest) sniffing ---------------------------------
 // MSE/blob videos have no downloadable DOM src; their real source is a manifest
 // (.m3u8/.mpd) the page fetches. We observe network requests and remember those
@@ -246,6 +296,14 @@ function processQueue() {
 async function startDownload(url, referer, tabId, onDone) {
   const { savePath, useCookies } = await chrome.storage.sync.get(['savePath', 'useCookies']);
   const S = (o) => setDL(url, o, tabId);
+
+  // Gathered here rather than in the host: only the extension can read the cookie
+  // store, and only for the one URL being downloaded.
+  let cookiesText = '';
+  if (useCookies) {
+    cookiesText = await collectCookies(url, referer);
+    if (!cookiesText) console.warn('[vid-dl] no cookies stored for this site; downloading without them');
+  }
 
   let released = false;
   const release = () => { if (!released) { released = true; if (onDone) onDone(); } };
@@ -307,7 +365,7 @@ async function startDownload(url, referer, tabId, onDone) {
   });
 
   try {
-    port.postMessage({ url, savePath: savePath || '', referer: referer || '', cookies: !!useCookies, format: 'best' });
+    port.postMessage({ url, savePath: savePath || '', referer: referer || '', cookiesText, format: 'best' });
   } catch (e) {
     S({ state: 'error', message: String(e) });
     flashBadge('ERR', '#c62828');

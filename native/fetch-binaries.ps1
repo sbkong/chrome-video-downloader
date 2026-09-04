@@ -10,9 +10,15 @@ New-Item -ItemType Directory -Force -Path $bin | Out-Null
 
 # ---- Integrity ------------------------------------------------------------
 # Everything fetched here is later EXECUTED, so nothing goes into bin\ until its
-# SHA-256 matches the digest its own publisher lists. A mismatch is fatal and the
+# SHA-256 matches the digest its publisher lists. A mismatch is fatal and the
 # download is discarded rather than kept. Each project publishes the digest in a
 # different shape, hence the three small readers below.
+#
+# Scope, so nobody reads more into this than it gives: each digest comes from the
+# same origin and the same "latest" pointer as the file it covers, so it catches a
+# corrupted or truncated transfer and a release landing mid-run - NOT a compromised
+# publisher, who would simply serve a matching digest. Pin literal digests here if
+# you need to defend against that.
 
 function Get-RemoteText([string]$url) {
   $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 120
@@ -50,8 +56,7 @@ function Get-FfmpegHash {
 function Get-DenoHash([string]$url) {
   $t = Get-RemoteText $url
   if ($t -match '(?im)^\s*Hash\s*:\s*([0-9a-fA-F]{64})\s*$') { return $Matches[1] }
-  if ($t -match '([0-9a-fA-F]{64})') { return $Matches[1] }
-  return ''
+  return ''  # only the structured line counts; any 64-hex run in the body does not
 }
 
 # ---- Downloads ------------------------------------------------------------
@@ -59,11 +64,16 @@ function Get-DenoHash([string]$url) {
 # new release lands between them the check fails; just re-run.
 
 Write-Host 'Downloading yt-dlp.exe...'
+# Staged through a temp file: verification deletes what it rejects, and writing
+# straight to bin\ would mean a mid-run release (see the note above) wipes a
+# perfectly good yt-dlp.exe and leaves the host with nothing to run.
 $ytExe = Join-Path $bin 'yt-dlp.exe'
+$ytTmp = Join-Path $env:TEMP ('ytdlp_' + [System.Guid]::NewGuid().ToString('N') + '.exe')
 $ytWant = Get-YtDlpHash
 Invoke-WebRequest -Uri 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe' `
-  -OutFile $ytExe -TimeoutSec 300
-Assert-Sha256 $ytExe $ytWant 'yt-dlp.exe'
+  -OutFile $ytTmp -TimeoutSec 300
+Assert-Sha256 $ytTmp $ytWant 'yt-dlp.exe'
+Move-Item -LiteralPath $ytTmp -Destination $ytExe -Force
 
 if (-not (Test-Path (Join-Path $bin 'ffmpeg.exe'))) {
   Write-Host 'Downloading ffmpeg (static, ~100MB)...'
