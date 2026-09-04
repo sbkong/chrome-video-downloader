@@ -171,6 +171,16 @@ function Invoke-Download($msg) {
 
   $last = $null
   $tail = New-Object System.Collections.Generic.List[string]
+
+  # One download runs through SEVERAL yt-dlp stages: with -f bv*+ba it fetches the
+  # video stream 0-100%, then the audio stream 0-100%, then merges. Forwarding each
+  # stage's own percent makes the UI count up twice, so give every stage its own
+  # slice of a single 0-100 range (video streams are far bigger than audio, hence
+  # the lopsided weights) and never let the reported value go backwards.
+  $partWeights = @(1.0)
+  $partIndex   = 0
+  $partsSeen   = 0
+  $maxPct      = 0.0
   # IMPORTANT: yt-dlp prints warnings to stderr. With 2>&1 under
   # $ErrorActionPreference='Stop', PowerShell promotes any stderr line to a
   # terminating error and aborts a download that yt-dlp would have finished. Use
@@ -183,11 +193,31 @@ function Invoke-Download($msg) {
       if ($line.Length -gt 500) { $line = $line.Substring(0, 500) }
       Log ('yt-dlp> ' + $line)
       $tail.Add($line); if ($tail.Count -gt 8) { $tail.RemoveAt(0) }
-      if ($line -match 'Destination:\s*(.+)$') { $last = $Matches[1] }
+      if ($line -match 'Destination:\s*(.+)$') {
+        $last = $Matches[1]
+        $partsSeen++
+        $partIndex = [Math]::Min($partsSeen - 1, $partWeights.Count - 1)  # next stage started
+      }
       elseif ($line -match 'Merging formats into "(.+)"') { $last = $Matches[1] }
       elseif ($line -match '\[download\]\s*(.+?)\s+has already been downloaded') { $last = $Matches[1] }
+      elseif ($line -match 'Downloading \d+ format\(s\):\s*(\S+)') {
+        # e.g. "Downloading 1 format(s): 137+140" -> two streams to fetch in turn.
+        $n = ([string]$Matches[1]).Split('+').Count
+        if ($n -eq 2) { $partWeights = @(0.88, 0.12) }
+        elseif ($n -gt 2) { $partWeights = @(1..$n | ForEach-Object { 1.0 / $n }) }
+        else { $partWeights = @(1.0) }
+      }
+      # Only real progress lines ("[download]  12.3% of ...") carry a percent.
+      # Matching bare "%" anywhere picked up unrelated output too.
       $pct = $null
-      if ($line -match '(\d{1,3}(?:\.\d+)?)%') { $pct = [double]$Matches[1] }
+      if ($line -match '^\[download\]\s+(\d{1,3}(?:\.\d+)?)%') {
+        $raw  = [double]$Matches[1]
+        $base = 0.0
+        for ($i = 0; $i -lt $partIndex; $i++) { $base += $partWeights[$i] }
+        $w = $partWeights[[Math]::Min($partIndex, $partWeights.Count - 1)]
+        $pct = [Math]::Round(($base + $w * $raw / 100.0) * 100.0, 1)
+        if ($pct -lt $maxPct) { $pct = $maxPct } else { $maxPct = $pct }
+      }
       Send-Message @{ type = 'progress'; line = $line; percent = $pct }
     }
   } finally {

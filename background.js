@@ -247,13 +247,22 @@ async function startDownload(url, referer, tabId, onDone) {
   }
 
   let finished = false;
+  let lastPercent = -1;
 
   port.onMessage.addListener((msg) => {
     if (!msg || !msg.type) return;
     if (msg.type === 'progress') {
       if (msg.line) console.log('[vid-dl][host]', msg.line);
-      S({ state: 'downloading', percent: msg.percent });
-      if (typeof msg.percent === 'number') flashBadge(Math.round(msg.percent) + '%', '#1565c0', false);
+      // Most host lines are plain log output with no percent in them. Writing
+      // that absence into the state blanked the number in the popup / badge on
+      // every such line, so only a real, non-decreasing percent updates it.
+      const patch = { state: 'downloading' };
+      if (typeof msg.percent === 'number' && msg.percent >= lastPercent) {
+        lastPercent = msg.percent;
+        patch.percent = msg.percent;
+      }
+      S(patch);
+      if (patch.percent != null) flashBadge(Math.round(patch.percent) + '%', '#1565c0', false);
     } else if (msg.type === 'done') {
       finished = true;
       console.log('[vid-dl][host] done', msg.file);
