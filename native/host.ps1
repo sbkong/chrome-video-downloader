@@ -1,7 +1,7 @@
 # Native messaging host (Windows PowerShell, no Python needed).
 # Reads { "url", "savePath" } from the extension over stdin (4-byte LE length +
 # UTF-8 JSON), runs the bundled yt-dlp.exe (+ ffmpeg.exe to merge, deno.exe as the
-# JavaScript runtime YouTube extraction needs) to download, and streams
+# JavaScript runtime some extractors need) to download, and streams
 # progress/done/error back using the same framing.
 
 $ErrorActionPreference = 'Stop'
@@ -119,32 +119,30 @@ function Invoke-Download($msg) {
   $ytArgs = @('--newline', '--no-playlist')
   if (Test-Path (Join-Path $bin 'ffmpeg.exe')) { $ytArgs += @('--ffmpeg-location', $bin) }
 
-  # YouTube handed out format URLs that need its "n"/signature JS challenge solved
-  # first. yt-dlp needs a JavaScript runtime for that; it only auto-detects deno on
-  # PATH, so point it at the bundled copy. Without it yt-dlp silently drops the
-  # challenge-protected formats and falls back to the android_vr client, whose URLs
-  # now fail with HTTP 403 Forbidden.
+  # Some sites hand out format URLs carrying a parameter that only the site's own
+  # JavaScript can compute. yt-dlp needs a JavaScript runtime for that; it only
+  # auto-detects deno on PATH, so point it at the bundled copy. Without it yt-dlp
+  # silently drops those formats and falls back to ones that fail with HTTP 403.
   $deno = Join-Path $bin 'deno.exe'
   if (Test-Path $deno) { $ytArgs += @('--js-runtimes', ('deno:' + $deno)) }
-  else { Log 'WARNING: bin\deno.exe missing - YouTube downloads will likely fail (run fetch-binaries.ps1)' }
+  else { Log 'WARNING: bin\deno.exe missing - some sites will likely fail with HTTP 403 (run fetch-binaries.ps1)' }
 
-  # Prefer the web_embedded player client for YouTube. The default clients now
-  # return either SABR-only formats with no direct URL, or formats gated behind a
-  # GVS PO token, and end up 403ing; web_embedded still serves plain HTTPS formats
-  # once the JS challenge above is solved. "default" stays as a fallback so other
-  # clients can still fill in when web_embedded has nothing (this arg is ignored
-  # for non-YouTube sites).
+  # Pin the embedded player client where yt-dlp's default choice now returns
+  # formats with no direct URL (or token-gated ones) that end up 403ing; the
+  # embedded client still serves plain HTTPS formats once the JS challenge above is
+  # solved. "default" stays as a fallback so other clients can fill in when it has
+  # nothing. The arg is ignored on sites it does not apply to.
   $ytArgs += @('--extractor-args', 'youtube:player_client=web_embedded,default')
   if ($msg.referer) { $ytArgs += @('--referer', [string]$msg.referer) }
 
-  # Optionally use the logged-in Chrome session's cookies so member-only /
-  # purchased videos (Vimeo on-demand, etc.) download with the user's access.
+  # Optionally use the logged-in Chrome session's cookies so videos a site only
+  # serves to a signed-in account download with the user's own access.
   # Off by default because reading Chrome's cookie DB can fail (locked / app-bound
   # encryption) and would then abort even ordinary downloads. Toggled in the popup.
   if ($msg.cookies) { $ytArgs += @('--cookies-from-browser', 'chrome') }
 
-  # Prefer H.264 mp4 video + AAC (m4a) stereo audio, merged into mp4. YouTube's
-  # default "best" is VP9/webm + Opus audio, which is what makes files come out as
+  # Prefer H.264 mp4 video + AAC (m4a) stereo audio, merged into mp4. The usual
+  # "best" is VP9/webm + Opus audio, which is what makes files come out as
   # .webm and can play with broken / single-channel sound in many players. The
   # fallback chain still lets any single-file source (a plain .mp4, HLS/DASH, etc.)
   # download. --merge-output-format mp4 + --remux ensures the container is mp4.

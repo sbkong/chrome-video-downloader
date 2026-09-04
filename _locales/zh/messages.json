@@ -17,7 +17,7 @@
   "clickRight": { "message": "右键" },
   "usageNoShortcut": { "message": "用法：使用列表或视频上的图标下载" },
   "useCookiesLabel": { "message": "使用浏览器 Cookie（需登录的视频）" },
-  "useCookiesHint": { "message": "使用已登录的 Chrome 会话 Cookie 下载。会员专享 / 已购视频需要它，但若无法读取 Cookie，下载可能失败。" },
+  "useCookiesHint": { "message": "使用已登录的 Chrome 会话 Cookie 下载，适用于需登录才能观看的视频。若无法读取 Cookie，下载可能失败。" },
   "downloadPageBtn": { "message": "下载当前页面" },
   "usage": { "message": "用法：{combo} + 点击视频，或使用列表 / 视频上的图标" },
   "stStarting": { "message": "开始中..." },

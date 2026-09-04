@@ -32,9 +32,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   if (request.action === 'downloadStream') {
     // A blob:/MSE video has no downloadable DOM src. Prefer the manifest
-    // (.m3u8/.mpd) we saw the tab fetch; if there is none (e.g. YouTube, which
-    // streams via range requests), fall back to the PAGE URL so yt-dlp's
-    // site-specific extractor handles it — same path the popup's PAGE item uses.
+    // (.m3u8/.mpd) we saw the tab fetch; if there is none (some players stream via
+    // plain range requests), fall back to the PAGE URL so yt-dlp's site-specific
+    // extractor handles it — same path the popup's PAGE item uses.
     const tabId = request.tabId != null ? request.tabId : (sender.tab && sender.tab.id);
     const pageUrl = (sender.tab && sender.tab.url) || request.referer || '';
     const referer = request.referer || pageUrl;

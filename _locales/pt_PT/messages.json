@@ -17,7 +17,7 @@
   "clickRight": { "message": "Clique direito" },
   "usageNoShortcut": { "message": "Como utilizar: use a lista ou o ícone sobre o vídeo" },
   "useCookiesLabel": { "message": "Utilizar cookies do navegador (vídeos que exigem sessão iniciada)" },
-  "useCookiesHint": { "message": "Transfere utilizando os cookies da sua sessão iniciada no Chrome. É necessário para vídeos exclusivos para membros ou comprados, mas se os cookies não puderem ser lidos a transferência pode falhar." },
+  "useCookiesHint": { "message": "Transfere utilizando os cookies da sua sessão iniciada no Chrome, para vídeos que um site só mostra com sessão iniciada. Se os cookies não puderem ser lidos a transferência pode falhar." },
   "downloadPageBtn": { "message": "Transferir esta página" },
   "usage": { "message": "Como utilizar: {combo} + clique num vídeo, ou use a lista / o ícone sobre o vídeo" },
   "stStarting": { "message": "A iniciar..." },

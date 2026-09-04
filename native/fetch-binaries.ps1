@@ -1,5 +1,5 @@
 # Downloads the bundled binaries (yt-dlp.exe + static ffmpeg.exe + deno.exe, the
-# JavaScript runtime yt-dlp needs for YouTube) into bin\.
+# JavaScript runtime yt-dlp needs on some sites) into bin\.
 # For maintainers: run once to (re)build the bundle or to update yt-dlp.
 #   .\fetch-binaries.ps1
 
@@ -26,10 +26,10 @@ if (-not (Test-Path (Join-Path $bin 'ffmpeg.exe'))) {
 }
 
 if (-not (Test-Path (Join-Path $bin 'deno.exe'))) {
-  # yt-dlp needs a JavaScript runtime to solve YouTube's "n"/signature challenges;
-  # without one its YouTube downloads fall back to formats that 403. deno is the
-  # runtime yt-dlp supports out of the box (~95MB).
-  Write-Host 'Downloading deno (JS runtime for YouTube, ~40MB zip)...'
+  # yt-dlp needs a JavaScript runtime to run some sites' player JS; without one
+  # those downloads fall back to formats that 403. deno is the runtime yt-dlp
+  # supports out of the box (~95MB).
+  Write-Host 'Downloading deno (JS runtime, ~40MB zip)...'
   $tmp = Join-Path $env:TEMP ('denodl_' + [System.Guid]::NewGuid().ToString('N'))
   New-Item -ItemType Directory -Force -Path $tmp | Out-Null
   $zip = Join-Path $tmp 'deno.zip'

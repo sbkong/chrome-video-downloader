@@ -93,9 +93,9 @@ async function loadVideos(verify) {
     return { url: m.url, kind: 'stream', label: label, dim: '', thumb: content.streamThumb || '' };
   });
   const items = [...direct, ...streams];
-  // Always offer "extract this page with yt-dlp". This is how real sites (Vimeo,
-  // etc.) whose player lives in a cross-origin iframe / uses a protected stream
-  // get downloaded — yt-dlp has a site-specific extractor for the page URL.
+  // Always offer "extract this page with yt-dlp". This is how sites whose player
+  // lives in a cross-origin iframe / uses a protected stream get downloaded —
+  // yt-dlp has a site-specific extractor for the page URL.
   if (activeTab.url && /^https?:/i.test(activeTab.url)) {
     items.push({ url: activeTab.url, kind: 'page', label: activeTab.title || activeTab.url, dim: '', thumb: '' });
   }

@@ -3,15 +3,15 @@
 A Chrome (Manifest V3) extension that downloads videos from a page using a local
 **yt-dlp** + **ffmpeg** helper. The extension detects videos and forwards a URL; a
 bundled native host does the actual download and merge — so real sites work
-(HLS/DASH players, Vimeo, YouTube, and the many sites yt-dlp supports).
+(HLS/DASH players and the many sites yt-dlp supports).
 
 ## Install
 
 1. `chrome://extensions` -> enable Developer mode -> **Load unpacked** -> this folder.
 2. Open the `native` folder and **double-click `install.bat`**, then reload the extension.
 
-Nothing else to install: `yt-dlp.exe`, `ffmpeg.exe` and `deno.exe` (the JS runtime
-yt-dlp needs for YouTube) are bundled in `native/bin` and the host runs on built-in
+Nothing else to install: `yt-dlp.exe`, `ffmpeg.exe` and `deno.exe` (the JavaScript
+runtime yt-dlp needs on some sites) are bundled in `native/bin` and the host runs on built-in
 PowerShell. See [`native/README.md`](native/README.md).
 
 ## Usage
@@ -39,8 +39,8 @@ popup has two tabs: **Videos** and **Settings**. Downloads run one at a time.
   - **FILE** — a direct video file on the page.
   - **STREAM** — an HLS/DASH manifest (`.m3u8` / `.mpd`) the page fetched. Play the
     video first so it gets detected, then hit Refresh.
-  - **PAGE** — hand the whole page URL to yt-dlp's site extractor (use this for
-    YouTube/Vimeo etc., whose player is in a cross-origin iframe).
+  - **PAGE** — hand the whole page URL to yt-dlp's site extractor (use this when
+    the player lives in a cross-origin iframe).
 - Check items and **Download selected**, or use a row's own button (Download -> %
   -> Open folder).
 - **Refresh** re-scans; it also drops finished entries whose file you deleted.
@@ -54,8 +54,8 @@ popup has two tabs: **Videos** and **Settings**. Downloads run one at a time.
 - **Set the combo**: click the capture box while **holding the modifier keys** and
   **left- or right-click** it — that exact combo is saved immediately.
 - **Show download button on video**: toggle the hover button.
-- **Use browser cookies**: pass your logged-in Chrome cookies to yt-dlp for
-  member-only / purchased videos (off by default).
+- **Use browser cookies**: pass your logged-in Chrome cookies to yt-dlp for videos
+  a site only shows while you are signed in (off by default).
 
 ## License
 

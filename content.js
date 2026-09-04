@@ -353,7 +353,7 @@ function scheduleBadges() {
 }
 
 // ---- SPA navigation ------------------------------------------------------
-// Sites like YouTube swap videos without reloading the page, reusing the same
+// Some sites swap videos without reloading the page, reusing the same
 // <video> element. A badge would then keep the PREVIOUS video's download target
 // (and its "open folder" state) until a manual reload. On every page-URL change
 // we forget each badge's target and resolve it again for the new video.

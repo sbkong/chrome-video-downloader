@@ -2,8 +2,8 @@
 
 The extension does not download video itself. It hands the current page URL to a
 local native messaging host, which runs **yt-dlp** (+ **ffmpeg** for merging) and
-saves the file. This is what makes real sites work — Vimeo, most HLS/DASH
-players, and the 1000+ sites yt-dlp supports.
+saves the file. This is what makes real sites work — most HLS/DASH players, and
+the 1000+ sites yt-dlp supports.
 
 **No tools to install.** `yt-dlp.exe`, `ffmpeg.exe` and `deno.exe` are bundled in
 `bin\`, and the host runs on Windows' built-in PowerShell. You only register it
@@ -35,7 +35,7 @@ To remove: double-click `uninstall.bat`.
 | File | Purpose |
 |------|---------|
 | `bin\yt-dlp.exe`, `bin\ffmpeg.exe` | Bundled download engine + muxer (no install needed). |
-| `bin\deno.exe` | JavaScript runtime yt-dlp uses to solve YouTube's JS challenges. |
+| `bin\deno.exe` | JavaScript runtime yt-dlp uses when a site's player JS has to be run. |
 | `host.ps1` | PowerShell native messaging host; runs yt-dlp, streams progress. |
 | `host.bat` | Launcher registered with the browser (runs host.ps1). |
 | `install.bat` / `install.ps1` | Register the host (Chrome + Edge, current user). |
@@ -53,12 +53,12 @@ throttles the check. `ffmpeg` and `deno` rarely need updating; run
 `fetch-binaries.ps1` to refresh them (it skips whichever is already present —
 delete the file first to force a re-download).
 
-YouTube needs more than yt-dlp alone. Its format URLs carry an `n` parameter that
-has to be de-obfuscated by running YouTube's own JavaScript, so the host passes
+Some sites need more than yt-dlp alone: their format URLs carry a parameter that
+has to be computed by running the site's own JavaScript, so the host passes
 `--js-runtimes deno:bin\deno.exe`; without a JS runtime yt-dlp drops those formats
 and falls back to ones that fail with `HTTP Error 403: Forbidden`. For the same
-reason the host pins the `web_embedded` player client, since yt-dlp's default
-clients now return SABR-only or PO-token-gated formats that also 403.
+reason the host pins a specific player client where yt-dlp's default choice
+returns formats that also 403.
 
 ## Notes / limits
 
