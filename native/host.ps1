@@ -11,12 +11,35 @@ $ytdlp = Join-Path $bin 'yt-dlp.exe'
 $logDir = Join-Path $root 'logs'
 try { if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Force -Path $logDir | Out-Null } } catch {}
 
+# Media URLs routinely carry CDN auth in the query string (tokens, signatures,
+# expiry windows). These logs are plain files that sit on disk, so scrub those
+# values before anything is written. The rest of the URL is kept - that is what
+# makes a log worth having - and ordinary identifiers (?v=, &list=) are untouched.
+$SECRET_PARAM_RE = '(?i)((?:token|sig|signature|hmac|key|secret|auth|authorization|password|passwd|session|sid|cookie|policy|credential|expires?|access_token|id_token|refresh_token|Key-Pair-Id|X-Amz-[A-Za-z0-9-]+|__hdnea__)=)[^&\s"'']*'
+
+function Redact([string]$m) {
+  if ([string]::IsNullOrEmpty($m)) { return $m }
+  return ($m -replace $SECRET_PARAM_RE, '$1<redacted>')
+}
+
 function Log([string]$m) {
   try {
     $file = Join-Path $logDir ((Get-Date -Format 'yyyy-MM-dd') + '.log')
-    Add-Content -Path $file -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + $m) -Encoding utf8
+    Add-Content -Path $file -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '  ' + (Redact $m)) -Encoding utf8
   } catch {}
 }
+
+# One log file per day with nothing pruning them is a permanent record of what the
+# user watched and downloaded. Keep two weeks.
+function Remove-OldLogs {
+  try {
+    $cutoff = (Get-Date).AddDays(-14)
+    Get-ChildItem -Path $logDir -Filter '*.log' -File |
+      Where-Object { $_.LastWriteTime -lt $cutoff } |
+      ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
+  } catch {}
+}
+Remove-OldLogs
 Log '--- host started ---'
 
 $stdin  = [Console]::OpenStandardInput()
@@ -66,8 +89,35 @@ function Update-YtDlpIfStale {
     $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     try { & $ytdlp -U 2>&1 | ForEach-Object { Log ('update> ' + [string]$_) } }
     finally { $ErrorActionPreference = $prev }
+    Test-YtDlpHash
     Set-Content -Path $marker -Value (Get-Date -Format 'o') -Encoding ascii
   } catch { Log ('update check failed: ' + $_.Exception.Message) }
+}
+
+# Check the yt-dlp.exe on disk against the SHA-256 the project publishes for its
+# latest release. yt-dlp's own updater verifies what it downloads before swapping
+# it in; this is a second, independent look, so a bad binary shows up in the log
+# instead of silently running. A mismatch only WARNS: it also happens innocently
+# when a newer release exists but -U has not run yet, and network trouble must
+# never block a download.
+function Test-YtDlpHash {
+  try {
+    $r = Invoke-WebRequest -Uri 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS' `
+           -UseBasicParsing -TimeoutSec 20
+    $txt = if ($r.Content -is [byte[]]) { [System.Text.Encoding]::UTF8.GetString($r.Content) } else { [string]$r.Content }
+    $want = ''
+    foreach ($line in ($txt -split "`n")) {
+      if ($line -match '^([0-9a-fA-F]{64})\s+yt-dlp\.exe\s*$') { $want = $Matches[1]; break }
+    }
+    if (-not $want) { Log 'update: no published hash for yt-dlp.exe; verification skipped'; return }
+    $have = (Get-FileHash -LiteralPath $ytdlp -Algorithm SHA256).Hash
+    if ($have -eq $want.ToUpperInvariant()) {
+      Log ('update: yt-dlp.exe verified (' + $have.Substring(0, 16) + '...)')
+    } else {
+      Log ('WARNING: yt-dlp.exe does not match the published release hash (have ' +
+           $have.Substring(0, 16) + '..., published ' + $want.Substring(0, 16) + '...)')
+    }
+  } catch { Log ('update: hash verification skipped (' + $_.Exception.Message + ')') }
 }
 
 # A plain, directly-fetchable media file (not an HLS/DASH manifest or a webpage).
@@ -136,9 +186,11 @@ function Invoke-Download($msg) {
   if ($msg.referer) { $ytArgs += @('--referer', [string]$msg.referer) }
 
   # Optionally use the logged-in Chrome session's cookies so videos a site only
-  # serves to a signed-in account download with the user's own access.
-  # Off by default because reading Chrome's cookie DB can fail (locked / app-bound
-  # encryption) and would then abort even ordinary downloads. Toggled in the popup.
+  # serves to a signed-in account download with the user's own access. NOTE this
+  # hands yt-dlp the ENTIRE Chrome cookie store, not just the target site's - the
+  # flag has no per-domain form. Off by default, both for that reason and because
+  # reading Chrome's cookie DB can fail (locked / app-bound encryption) and would
+  # then abort even ordinary downloads. Toggled in the popup.
   if ($msg.cookies) { $ytArgs += @('--cookies-from-browser', 'chrome') }
 
   # Prefer H.264 mp4 video + AAC (m4a) stereo audio, merged into mp4. The usual
@@ -250,13 +302,25 @@ function Invoke-Download($msg) {
   }
 }
 
+# Open Explorer on a finished download. Defence in depth: the extension already
+# refuses paths it did not record, but explorer.exe LAUNCHES any executable path
+# handed to it, so re-check here. -LiteralPath stops wildcard matches, a quote
+# would break out of the argument we build, and the fallback must land on a real
+# directory (a parent that is itself a file would get executed).
 function Reveal-Path([string]$path) {
   try {
-    if ($path -and (Test-Path $path)) {
+    if ([string]::IsNullOrWhiteSpace($path) -or $path.Contains('"')) {
+      Log ('reveal refused (invalid path)')
+      Send-Message @{ type = 'revealed'; ok = $false; message = 'invalid path' }
+      return
+    }
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
       Start-Process explorer.exe -ArgumentList ('/select,"' + $path + '"')
-    } elseif ($path) {
+    } else {
       $dir = Split-Path -Parent $path
-      if ($dir -and (Test-Path $dir)) { Start-Process explorer.exe -ArgumentList ('"' + $dir + '"') }
+      if ($dir -and (Test-Path -LiteralPath $dir -PathType Container)) {
+        Start-Process explorer.exe -ArgumentList ('"' + $dir + '"')
+      }
     }
     Send-Message @{ type = 'revealed'; ok = $true }
   } catch { Send-Message @{ type = 'revealed'; ok = $false; message = $_.Exception.Message } }

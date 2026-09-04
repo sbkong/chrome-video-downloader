@@ -55,7 +55,9 @@ popup has two tabs: **Videos** and **Settings**. Downloads run one at a time.
   **left- or right-click** it — that exact combo is saved immediately.
 - **Show download button on video**: toggle the hover button.
 - **Use browser cookies**: pass your logged-in Chrome cookies to yt-dlp for videos
-  a site only shows while you are signed in (off by default).
+  a site only shows while you are signed in (off by default). This hands yt-dlp
+  your **whole Chrome cookie store**, not just the site being downloaded from —
+  leave it off unless a download actually needs it.
 
 ## License
 

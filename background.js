@@ -74,16 +74,32 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   if (request.action === 'reveal') {
-    try {
-      const port = chrome.runtime.connectNative(HOST);
-      port.onMessage.addListener(() => { try { port.disconnect(); } catch (e) {} });
-      port.onDisconnect.addListener(() => {});
-      port.postMessage({ cmd: 'reveal', path: request.path });
-    } catch (e) {}
-    sendResponse({ ok: true });
-    return;
+    // Reveal ONLY a file this extension recorded as downloaded. The path arrives
+    // from a content script and the native host feeds it to explorer.exe, which
+    // launches whatever executable path it is handed - so an unchecked value here
+    // would be a way for a page to run a local program. Session storage is the
+    // source of truth: the in-memory map may still be empty right after the
+    // service worker wakes.
+    chrome.storage.session.get('downloads').then((g) => {
+      const map = Object.assign({}, g.downloads || {}, downloads);
+      const ok = !!request.path && Object.keys(map).some((u) => map[u] && map[u].path === request.path);
+      if (ok) revealPath(request.path);
+      else console.warn('[vid-dl] reveal refused for an unrecorded path');
+      sendResponse({ ok });
+    });
+    return true;
   }
 });
+
+// Hand a verified path to the host, which opens Explorer on it.
+function revealPath(path) {
+  try {
+    const port = chrome.runtime.connectNative(HOST);
+    port.onMessage.addListener(() => { try { port.disconnect(); } catch (e) {} });
+    port.onDisconnect.addListener(() => {});
+    port.postMessage({ cmd: 'reveal', path });
+  } catch (e) {}
+}
 
 // ---- Shared download state ----------------------------------------------
 function setDL(url, patch, tabId) {

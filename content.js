@@ -27,6 +27,9 @@ function modMatches(e) {
 }
 
 function handleShortcut(event) {
+  // Only a genuine user gesture. Without this a page could dispatch its own
+  // modifier-click at a <video> and start downloads the user never asked for.
+  if (!event.isTrusted) return;
   if (!shortcutEnabled) return;
   if (!modMatches(event)) return;
   const video = findVideo(event);
@@ -81,7 +84,7 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
     vdlBadges.forEach((b, video) => {
       const src = videoSrc(video);
       if (src && /^https?:/i.test(src)) return; // direct video, unaffected
-      b.dataset.dlurl = req.url;
+      bs(b).dlurl = req.url;
       hydrateBadge(b);
     });
   }
@@ -169,6 +172,19 @@ const BG = {
 };
 
 const vdlBadges = new Map(); // video element -> badge element
+
+// A badge's state lives HERE, in this content script's isolated world - never on
+// the element. Badges are appended to the page's own DOM (see makeBadge), so
+// anything kept in their dataset is readable AND writable by the page: it could
+// set state to 'done' with a path of its choosing and dispatch a click to make us
+// hand that path to the native host. Only the data-mediadl marker stays public.
+const badgeState = new WeakMap(); // badge element -> { state, percent, path, dlurl }
+
+function bs(b) {
+  let s = badgeState.get(b);
+  if (!s) { s = { state: 'idle', percent: '', path: '', dlurl: '' }; badgeState.set(b, s); }
+  return s;
+}
 let vdlScheduled = false;
 let ptrX = -1, ptrY = -1;    // last cursor position, for geometry-based hover
 let dlCache = {};            // url -> last known status (shared with popup, keyed by URL)
@@ -191,17 +207,18 @@ refreshDlCache();
 // Set a badge from the shared state, or reset a now-stale "done" badge (its file
 // was deleted, so it's no longer in the map) back to "download".
 function hydrateBadge(b) {
-  const u = b.dataset.dlurl;
-  if (u && dlCache[u]) { applyStatusToBadge(b, dlCache[u]); return; }
-  if (b.dataset.state === 'done') { b.dataset.state = 'idle'; b.dataset.path = ''; renderBadge(b); }
+  const s = bs(b);
+  if (s.dlurl && dlCache[s.dlurl]) { applyStatusToBadge(b, dlCache[s.dlurl]); return; }
+  if (s.state === 'done') { s.state = 'idle'; s.path = ''; renderBadge(b); }
 }
 
 // Paint a badge to match its state: download icon / percent / open-folder icon.
 function renderBadge(b) {
-  const s = b.dataset.state || 'idle';
+  const st = bs(b);
+  const s = st.state || 'idle';
   b.style.background = BG[s] || BG.idle;
   if (s === 'downloading') {
-    const p = b.dataset.percent;
+    const p = st.percent;
     b.innerHTML = '<span style="color:#fff;font:700 9px/1 -apple-system,Segoe UI,sans-serif">' +
       (p !== '' && p != null ? p + '%' : '...') + '</span>';
     b.title = 'Downloading';
@@ -220,9 +237,10 @@ function stateFromStatus(st) {
 
 // Push a background status object onto a badge's visible state.
 function applyStatusToBadge(b, st) {
-  b.dataset.state = stateFromStatus(st);
-  if (b.dataset.state === 'downloading') b.dataset.percent = (typeof st.percent === 'number') ? String(Math.round(st.percent)) : '';
-  if (b.dataset.state === 'done') b.dataset.path = st.path || '';
+  const s = bs(b);
+  s.state = stateFromStatus(st);
+  if (s.state === 'downloading') s.percent = (typeof st.percent === 'number') ? String(Math.round(st.percent)) : '';
+  if (s.state === 'done') s.path = st.path || '';
   renderBadge(b);
 }
 
@@ -237,25 +255,26 @@ function resolveBadgeUrl(video, cb) {
 function initBadge(b, video) {
   resolveBadgeUrl(video, (url) => {
     if (!url) return;
-    b.dataset.dlurl = url;
+    bs(b).dlurl = url;
     hydrateBadge(b);
   });
 }
 
 function startBadge(b, video) {
-  b.dataset.state = 'downloading';
-  b.dataset.percent = '';
+  const s = bs(b);
+  s.state = 'downloading';
+  s.percent = '';
   renderBadge(b);
   scheduleBadges(); // keep it pinned even if the cursor leaves
   const src = videoSrc(video);
   if (src && /^https?:/i.test(src)) {
-    b.dataset.dlurl = src;
+    s.dlurl = src;
     chrome.runtime.sendMessage({ action: 'download', url: src, referer: location.href, title: document.title });
   } else {
     chrome.runtime.sendMessage({ action: 'downloadStream', referer: location.href, title: document.title }, (r) => {
       void chrome.runtime.lastError;
-      if (r && r.url) b.dataset.dlurl = r.url;
-      else { b.dataset.state = 'error'; renderBadge(b); }
+      if (r && r.url) s.dlurl = r.url;
+      else { s.state = 'error'; renderBadge(b); }
     });
   }
 }
@@ -264,7 +283,6 @@ function makeBadge(video) {
   const b = document.createElement('div');
   b.setAttribute('aria-label', 'Download video');
   b.dataset.mediadl = 'video'; // lets the Image Downloader detect/avoid our badge
-  b.dataset.state = 'idle';
   b.style.cssText = [
     'position:fixed', 'z-index:2147483647', 'width:30px', 'height:30px',
     'box-sizing:border-box', 'display:none', 'align-items:center', 'justify-content:center',
@@ -278,10 +296,11 @@ function makeBadge(video) {
   b.addEventListener('mouseleave', () => { b.style.transform = 'scale(1)'; });
   b.addEventListener('click', (e) => {
     stop(e);
-    const s = b.dataset.state;
-    if (s === 'downloading') return;
-    if (s === 'done') {
-      if (b.dataset.path) chrome.runtime.sendMessage({ action: 'reveal', path: b.dataset.path });
+    if (!e.isTrusted) return; // a real user click only, never one the page synthesized
+    const s = bs(b);
+    if (s.state === 'downloading') return;
+    if (s.state === 'done') {
+      if (s.path) chrome.runtime.sendMessage({ action: 'reveal', path: s.path });
       return;
     }
     startBadge(b, video); // idle or error -> start / retry
@@ -293,10 +312,10 @@ function makeBadge(video) {
 
 // A background status broadcast -> update every badge pointing at that URL. Also
 // cache it so badges created later start in the right state.
-function applyBadgeStatus(s) {
-  if (!s || !s.url) return;
-  dlCache[s.url] = s;
-  vdlBadges.forEach((b) => { if (b.dataset.dlurl === s.url) applyStatusToBadge(b, s); });
+function applyBadgeStatus(st) {
+  if (!st || !st.url) return;
+  dlCache[st.url] = st;
+  vdlBadges.forEach((b) => { if (bs(b).dlurl === st.url) applyStatusToBadge(b, st); });
   scheduleBadges(); // recompute visibility (pin while downloading, release when done)
 }
 
@@ -327,7 +346,8 @@ function positionBadges() {
     const onScreen = r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth;
     // Normally shown only on hover, but stay visible while downloading (so the %
     // keeps showing) and once done (so "open folder" stays handy).
-    const persist = b.dataset.state === 'downloading' || b.dataset.state === 'done';
+    const bstate = bs(b).state;
+    const persist = bstate === 'downloading' || bstate === 'done';
     if ((v !== hover && !persist) || !onScreen) { b.style.display = 'none'; return; }
     b.style.display = 'flex';
     // Just OUTSIDE the video, to the RIGHT of its top-right corner. If there's no
@@ -362,12 +382,13 @@ let lastPageUrl = location.href;
 function handleNavigation() {
   lastPageUrl = location.href;
   vdlBadges.forEach((b, video) => {
+    const s = bs(b);
     const src = videoSrc(video);
-    if (src && /^https?:/i.test(src) && src === b.dataset.dlurl) return; // same media, keep its state
-    b.dataset.dlurl = '';
-    b.dataset.state = 'idle';
-    b.dataset.percent = '';
-    b.dataset.path = '';
+    if (src && /^https?:/i.test(src) && src === s.dlurl) return; // same media, keep its state
+    s.dlurl = '';
+    s.state = 'idle';
+    s.percent = '';
+    s.path = '';
     renderBadge(b);
     initBadge(b, video); // re-key to the new src / manifest / page URL, then re-hydrate
   });
