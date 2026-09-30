@@ -341,10 +341,15 @@ savePathInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') docume
 // path is the one chrome://extensions shows for this extension.
 const hostBanner = document.getElementById('hostBanner');
 const copyCmdBtn = document.getElementById('copyCmd');
-const hostCmdEl = document.getElementById('hostCmd');
-const INSTALL_CMD = 'powershell -NoProfile -ExecutionPolicy Bypass -File "' + t('hostBannerFolderToken') + '\\native\\install.ps1"';
+const hostExtIdEl = document.getElementById('hostExtId');
 
-hostCmdEl.textContent = INSTALL_CMD;
+// An extension cannot know its own folder on disk, so the banner never asks the
+// user to supply one: it points at the installer, which registers the host and
+// looks this ID up by itself. The ID is shown only because it is what to quote
+// when something goes wrong.
+document.getElementById('getInstaller').href =
+  'https://github.com/sbkong/chrome-video-downloader/releases/latest';
+hostExtIdEl.textContent = chrome.runtime.id;
 
 function checkHost() {
   chrome.runtime.sendMessage({ action: 'checkHost' }, (r) => {
@@ -358,10 +363,10 @@ copyCmdBtn.addEventListener('click', () => {
     copyCmdBtn.textContent = t('hostBannerCopied');
     setTimeout(() => { copyCmdBtn.textContent = t('hostBannerCopy'); }, 1500);
   };
-  navigator.clipboard.writeText(INSTALL_CMD).then(flash, () => {
+  navigator.clipboard.writeText(chrome.runtime.id).then(flash, () => {
     // Clipboard blocked — select the text so Ctrl+C still works.
     const r = document.createRange();
-    r.selectNodeContents(hostCmdEl);
+    r.selectNodeContents(hostExtIdEl);
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(r);
