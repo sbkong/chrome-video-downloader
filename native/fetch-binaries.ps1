@@ -1,5 +1,6 @@
-# Downloads the bundled binaries (yt-dlp.exe + static ffmpeg.exe + deno.exe, the
-# JavaScript runtime yt-dlp needs on some sites) into bin\.
+# Downloads the bundled binaries into bin\: yt-dlp.exe (the downloader), static
+# ffmpeg.exe (merges separate audio/video streams) and deno.exe (the JavaScript
+# runtime yt-dlp needs on some sites).
 # For maintainers: run once to (re)build the bundle or to update yt-dlp.
 #   .\fetch-binaries.ps1
 
@@ -8,17 +9,37 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $bin = Join-Path $here 'bin'
 New-Item -ItemType Directory -Force -Path $bin | Out-Null
 
-# ---- Integrity ------------------------------------------------------------
-# Everything fetched here is later EXECUTED, so nothing goes into bin\ until its
-# SHA-256 matches the digest its publisher lists. A mismatch is fatal and the
-# download is discarded rather than kept. Each project publishes the digest in a
-# different shape, hence the three small readers below.
+# ---- Version policy -------------------------------------------------------
+# The three binaries are not alike, because of WHO calls them.
 #
-# Scope, so nobody reads more into this than it gives: each digest comes from the
-# same origin and the same "latest" pointer as the file it covers, so it catches a
-# corrupted or truncated transfer and a release landing mid-run - NOT a compromised
-# publisher, who would simply serve a matching digest. Pin literal digests here if
-# you need to defend against that.
+# yt-dlp is called by this project directly, and it has to keep up with the sites
+# it downloads from - a months-old copy simply stops working. So it follows the
+# latest release, and host.ps1 keeps it current afterwards with -U. The cost is
+# that its hash cannot be pinned here: a moving target has no fixed hash, so it is
+# checked against the digest its own release publishes.
+#
+# ffmpeg and deno are never called by us - yt-dlp invokes them, with arguments we
+# never see. Nothing about them needs to be new, and a new major version is a way
+# for downloads that work today to break tomorrow. So both are pinned to the exact
+# build this project has been tested against, and verified against a digest
+# committed HERE rather than one fetched from the download site. That is the
+# stronger check: a compromised or spoofed site can serve a matching sidecar
+# digest, but it cannot match a hash that already sits in git.
+#
+# To move a pin: change the version and URL, delete the old .exe from bin\, run
+# this, and paste the SHA-256 it prints for the extracted executable.
+$FFMPEG_VERSION = '8.1.2'
+$FFMPEG_URL     = 'https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.1.2-essentials_build.zip'
+$FFMPEG_EXE_SHA = '1326DDE4C84FF1F96FE6B8916C5BED29E163E9B5DCCF995F6F3DB069D143EC5E'
+
+$DENO_VERSION   = '2.9.5'
+$DENO_URL       = 'https://github.com/denoland/deno/releases/download/v2.9.5/deno-x86_64-pc-windows-msvc.zip'
+$DENO_EXE_SHA   = '98F8C2A2D470E4CCB04C935C86FF8050817D877762AEC5EAEEB9E409CCB3B9FD'
+
+$YTDLP_URL      = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
+$YTDLP_SUMS_URL = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS'
+
+# ---- Integrity helpers ----------------------------------------------------
 
 function Get-RemoteText([string]$url) {
   $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 120
@@ -28,85 +49,91 @@ function Get-RemoteText([string]$url) {
 
 function Assert-Sha256([string]$file, [string]$expected, [string]$what) {
   if ([string]::IsNullOrWhiteSpace($expected)) {
-    throw "$what : no published SHA-256 to verify against; refusing to install an unchecked binary."
+    throw "$what : no SHA-256 to verify against; refusing to install an unchecked binary."
   }
   $actual = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
   if ($actual -ne $expected.Trim().ToUpperInvariant()) {
     Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
-    throw "$what : SHA-256 mismatch. published $expected, got $actual. Download discarded."
+    throw "$what : SHA-256 mismatch. expected $expected, got $actual. Download discarded."
   }
   Write-Host ('  verified SHA-256 ' + $actual.Substring(0, 16) + '...')
 }
 
-# yt-dlp: one "<hex>  <asset>" line per release asset.
+# Fetch a pinned archive, unpack it, and install the executable only once it
+# matches the hash committed in this file.
+function Install-PinnedExe([string]$url, [string]$sidecarUrl, [string]$exeName, [string]$pinnedSha, [string]$label) {
+  $tmp = Join-Path $env:TEMP ('vdlfetch_' + [System.Guid]::NewGuid().ToString('N'))
+  New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+  try {
+    Write-Host ("Downloading $label...")
+    $zip = Join-Path $tmp 'pkg.zip'
+
+    # The publisher's own digest first - it catches a truncated transfer before we
+    # spend time unpacking 100MB. It is not the real gate, so a missing sidecar is
+    # not fatal.
+    $zipWant = ''
+    try {
+      $sidecar = Get-RemoteText $sidecarUrl
+      if ($sidecar -match '(?im)^\s*Hash\s*:\s*([0-9a-fA-F]{64})\s*$') { $zipWant = $Matches[1] }
+      elseif ($sidecar -match '([0-9a-fA-F]{64})') { $zipWant = $Matches[1] }
+    } catch { Write-Host '  (publisher digest unavailable; the pinned hash below still applies)' }
+
+    # Everything is fetched from the project's own official distribution, never a
+    # mirror of ours - one less party to trust, and the pinned hash below already
+    # covers tampering. The price is that a publisher may retire an old build, so
+    # say plainly what to do when the pinned URL stops resolving. Never silently
+    # fall back to "latest": that would quietly undo the pin.
+    try {
+      Invoke-WebRequest -Uri $url -OutFile $zip -TimeoutSec 580
+    } catch {
+      throw ("$label : could not download the pinned build from $url`n" +
+             "  The publisher may have retired it. Pick a current version, update the " +
+             "matching `$..._VERSION / `$..._URL / `$..._EXE_SHA in this file, and re-run.`n" +
+             "  Underlying error: " + $_.Exception.Message)
+    }
+    if ($zipWant) { Assert-Sha256 $zip $zipWant ($label + ' archive') }
+
+    Expand-Archive -LiteralPath $zip -DestinationPath $tmp -Force
+    $found = Get-ChildItem -LiteralPath $tmp -Recurse -Filter $exeName | Select-Object -First 1
+    if (-not $found) { throw "$label : $exeName was not found inside the archive." }
+
+    # The gate that matters: this hash lives in git, not on the download server.
+    Assert-Sha256 $found.FullName $pinnedSha $label
+    Copy-Item -LiteralPath $found.FullName -Destination (Join-Path $bin $exeName) -Force
+  } finally {
+    Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+  }
+}
+
+# ---- yt-dlp: always the latest release -------------------------------------
+# One "<hex>  <asset>" line per release asset.
 function Get-YtDlpHash {
-  $sums = Get-RemoteText 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS'
-  foreach ($line in ($sums -split "`n")) {
+  foreach ($line in ((Get-RemoteText $YTDLP_SUMS_URL) -split "`n")) {
     if ($line -match '^([0-9a-fA-F]{64})\s+yt-dlp\.exe\s*$') { return $Matches[1] }
   }
   return ''
 }
 
-# gyan.dev: a sidecar holding the bare hex digest.
-function Get-FfmpegHash {
-  return ((Get-RemoteText 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip.sha256').Trim() -split '\s+')[0]
-}
-
-# deno: a sidecar in PowerShell Get-FileHash layout ("Hash : <hex>").
-function Get-DenoHash([string]$url) {
-  $t = Get-RemoteText $url
-  if ($t -match '(?im)^\s*Hash\s*:\s*([0-9a-fA-F]{64})\s*$') { return $Matches[1] }
-  return ''  # only the structured line counts; any 64-hex run in the body does not
-}
-
-# ---- Downloads ------------------------------------------------------------
-# NOTE: the binary and its digest are two separate requests against "latest". If a
-# new release lands between them the check fails; just re-run.
-
-Write-Host 'Downloading yt-dlp.exe...'
+Write-Host 'Downloading yt-dlp.exe (latest)...'
 # Staged through a temp file: verification deletes what it rejects, and writing
-# straight to bin\ would mean a mid-run release (see the note above) wipes a
-# perfectly good yt-dlp.exe and leaves the host with nothing to run.
+# straight to bin\ would mean a release landing mid-run wipes a working copy and
+# leaves the host with nothing to run.
 $ytExe = Join-Path $bin 'yt-dlp.exe'
 $ytTmp = Join-Path $env:TEMP ('ytdlp_' + [System.Guid]::NewGuid().ToString('N') + '.exe')
 $ytWant = Get-YtDlpHash
-Invoke-WebRequest -Uri 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe' `
-  -OutFile $ytTmp -TimeoutSec 300
+Invoke-WebRequest -Uri $YTDLP_URL -OutFile $ytTmp -TimeoutSec 300
 Assert-Sha256 $ytTmp $ytWant 'yt-dlp.exe'
 Move-Item -LiteralPath $ytTmp -Destination $ytExe -Force
 
-if (-not (Test-Path (Join-Path $bin 'ffmpeg.exe'))) {
-  Write-Host 'Downloading ffmpeg (static, ~100MB)...'
-  $tmp = Join-Path $env:TEMP ('ffdl_' + [System.Guid]::NewGuid().ToString('N'))
-  New-Item -ItemType Directory -Force -Path $tmp | Out-Null
-  $zip = Join-Path $tmp 'ffmpeg.zip'
-  $ffWant = Get-FfmpegHash
-  Invoke-WebRequest -Uri 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' `
-    -OutFile $zip -TimeoutSec 580
-  Assert-Sha256 $zip $ffWant 'ffmpeg-release-essentials.zip'
-  Expand-Archive -Path $zip -DestinationPath $tmp -Force
-  $ff = Get-ChildItem -Path $tmp -Recurse -Filter ffmpeg.exe | Select-Object -First 1
-  Copy-Item $ff.FullName -Destination (Join-Path $bin 'ffmpeg.exe') -Force
-  Remove-Item -Recurse -Force $tmp
+# ---- ffmpeg and deno: pinned ----------------------------------------------
+if (-not (Test-Path -LiteralPath (Join-Path $bin 'ffmpeg.exe'))) {
+  Install-PinnedExe $FFMPEG_URL ($FFMPEG_URL + '.sha256') 'ffmpeg.exe' $FFMPEG_EXE_SHA "ffmpeg $FFMPEG_VERSION (~100MB)"
 }
-
-if (-not (Test-Path (Join-Path $bin 'deno.exe'))) {
-  # yt-dlp needs a JavaScript runtime to run some sites' player JS; without one
-  # those downloads fall back to formats that 403. deno is the runtime yt-dlp
-  # supports out of the box (~95MB).
-  Write-Host 'Downloading deno (JS runtime, ~40MB zip)...'
-  $tmp = Join-Path $env:TEMP ('denodl_' + [System.Guid]::NewGuid().ToString('N'))
-  New-Item -ItemType Directory -Force -Path $tmp | Out-Null
-  $zip = Join-Path $tmp 'deno.zip'
-  $denoUrl = 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip'
-  $dnWant = Get-DenoHash ($denoUrl + '.sha256sum')
-  Invoke-WebRequest -Uri $denoUrl -OutFile $zip -TimeoutSec 580
-  Assert-Sha256 $zip $dnWant 'deno-x86_64-pc-windows-msvc.zip'
-  Expand-Archive -Path $zip -DestinationPath $tmp -Force
-  $dn = Get-ChildItem -Path $tmp -Recurse -Filter deno.exe | Select-Object -First 1
-  Copy-Item $dn.FullName -Destination (Join-Path $bin 'deno.exe') -Force
-  Remove-Item -Recurse -Force $tmp
+if (-not (Test-Path -LiteralPath (Join-Path $bin 'deno.exe'))) {
+  Install-PinnedExe $DENO_URL ($DENO_URL + '.sha256sum') 'deno.exe' $DENO_EXE_SHA "deno $DENO_VERSION (~40MB zip)"
 }
 
 Get-ChildItem $bin | Select-Object Name, @{ n = 'MB'; e = { [math]::Round($_.Length / 1MB, 1) } }
+Write-Host ''
+Write-Host "Pinned: ffmpeg $FFMPEG_VERSION, deno $DENO_VERSION. yt-dlp tracks latest and self-updates."
 Write-Host 'Binaries ready in bin\.'
