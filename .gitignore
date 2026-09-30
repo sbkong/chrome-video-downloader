@@ -16,3 +16,5 @@ native/bin/
 # Generated at install time (machine-specific paths)
 native/com.sbk.ytdlp.json
 native/run_host.bat
+native/installer/Output/
+dist
