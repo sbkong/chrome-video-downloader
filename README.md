@@ -2,17 +2,27 @@
 
 A Chrome (Manifest V3) extension that downloads videos from a page using a local
 **yt-dlp** + **ffmpeg** helper. The extension detects videos and forwards a URL; a
-bundled native host does the actual download and merge — so real sites work
+local native host does the actual download and merge — so real sites work
 (HLS/DASH players and the many sites yt-dlp supports).
 
 ## Install
 
-1. `chrome://extensions` -> enable Developer mode -> **Load unpacked** -> this folder.
-2. Open the `native` folder and **double-click `install.bat`**, then reload the extension.
+A browser extension cannot launch a local program, so the downloader is installed
+separately once. That is the only manual step.
 
-Nothing else to install: `yt-dlp.exe`, `ffmpeg.exe` and `deno.exe` (the JavaScript
-runtime yt-dlp needs on some sites) are bundled in `native/bin` and the host runs on built-in
-PowerShell. See [`native/README.md`](native/README.md).
+1. Install the extension.
+2. Download and run the downloader installer from
+   [Releases](https://github.com/sbkong/chrome-video-downloader/releases/latest),
+   then reload the extension.
+
+The installer needs no administrator rights (it registers under your own user
+account) and fetches `yt-dlp.exe`, `ffmpeg.exe` and `deno.exe` from each
+project's own official releases, about 160 MB. Windows will warn about an unknown
+publisher — the installer is not code-signed yet.
+
+**From source:** `chrome://extensions` -> enable Developer mode -> **Load
+unpacked** -> this folder, then double-click `native/install.bat`. See
+[`native/README.md`](native/README.md).
 
 ## Usage
 
