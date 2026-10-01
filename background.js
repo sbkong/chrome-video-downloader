@@ -294,7 +294,7 @@ function processQueue() {
 }
 
 async function startDownload(url, referer, tabId, onDone) {
-  const { savePath, useCookies } = await chrome.storage.sync.get(['savePath', 'useCookies']);
+  const { savePath, useCookies, quality } = await chrome.storage.sync.get(['savePath', 'useCookies', 'quality']);
   const S = (o) => setDL(url, o, tabId);
 
   // Gathered here rather than in the host: only the extension can read the cookie
@@ -365,7 +365,7 @@ async function startDownload(url, referer, tabId, onDone) {
   });
 
   try {
-    port.postMessage({ url, savePath: savePath || '', referer: referer || '', cookiesText, format: 'best' });
+    port.postMessage({ url, savePath: savePath || '', referer: referer || '', cookiesText, format: 'best', quality: quality || 'best' });
   } catch (e) {
     S({ state: 'error', message: String(e) });
     flashBadge('ERR', '#c62828');

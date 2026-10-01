@@ -261,12 +261,19 @@ function Invoke-Download($msg) {
     Log ('using scoped cookie file (' + (([string]$msg.cookiesText) -split "`n").Count + ' lines)')
   }
 
-  # Prefer H.264 mp4 video + AAC (m4a) stereo audio, merged into mp4. The usual
-  # "best" is VP9/webm + Opus audio, which is what makes files come out as
-  # .webm and can play with broken / single-channel sound in many players. The
-  # fallback chain still lets any single-file source (a plain .mp4, HLS/DASH, etc.)
-  # download. --merge-output-format mp4 + --remux ensures the container is mp4.
-  $ytArgs += @('-f', 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b',
+  # Resolution comes first, then H.264, then mp4 video / m4a (AAC) audio.
+  # Filtering on [ext=mp4] instead would cap most sites at 1080p, because 1440p/4K
+  # is usually only offered as VP9/AV1. vcodec:h264 keeps H.264 wherever the chosen
+  # size has it (AV1 needs an extra codec on many PCs) and steers 4K to VP9 over
+  # AV1. Audio has no resolution, so ext:mp4:m4a still picks AAC over Opus, which
+  # plays with broken / single-channel sound in many players.
+  # "res:N" means "the largest at or below N", falling back to the next size up
+  # only when nothing that small exists. The quality setting is whitelisted - it
+  # ends up in a yt-dlp argument. --merge-output-format + --remux keep it mp4.
+  $quality = [string]$msg.quality
+  $res = if ($quality -in @('2160', '1080', '720', '480')) { 'res:' + $quality } else { 'res' }
+  $ytArgs += @('-f', 'bv*+ba/b',
+               '-S', ($res + ',vcodec:h264,ext:mp4:m4a'),
                '--merge-output-format', 'mp4',
                '--remux-video', 'mp4')
 

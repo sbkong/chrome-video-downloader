@@ -254,12 +254,18 @@ const savePathInput = document.getElementById('savePath');
 const useCookiesInput = document.getElementById('useCookies');
 const shortcutEnabledInput = document.getElementById('shortcutEnabled');
 const badgeEnabledInput = document.getElementById('badgeEnabled');
+const qualityInput = document.getElementById('quality');
 const captureEl = document.getElementById('shortcutCapture');
 const saveStatus = document.getElementById('saveStatus');
 
 // The on-video hover button toggle applies immediately (auto-save).
 badgeEnabledInput.addEventListener('change', () => {
   chrome.storage.sync.set({ badgeEnabled: badgeEnabledInput.checked });
+});
+
+// Quality cap also applies immediately: the next download (popup or badge) uses it.
+qualityInput.addEventListener('change', () => {
+  chrome.storage.sync.set({ quality: qualityInput.value });
 });
 
 const MOD_ORDER = ['ctrl', 'alt', 'shift', 'meta'];
@@ -312,8 +318,10 @@ captureEl.addEventListener('mousedown', (e) => {
 captureEl.addEventListener('contextmenu', (e) => e.preventDefault()); // capture right-click without a menu
 shortcutEnabledInput.addEventListener('change', () => { renderShortcut(); persistShortcut(); });
 
-chrome.storage.sync.get(['savePath', 'clickMod', 'clickButton', 'shortcutEnabled', 'badgeEnabled', 'useCookies'], ({ savePath, clickMod, clickButton: cb, shortcutEnabled, badgeEnabled, useCookies }) => {
+chrome.storage.sync.get(['savePath', 'clickMod', 'clickButton', 'shortcutEnabled', 'badgeEnabled', 'useCookies', 'quality'], ({ savePath, clickMod, clickButton: cb, shortcutEnabled, badgeEnabled, useCookies, quality }) => {
   savePathInput.value = savePath || '';
+  qualityInput.value = quality || 'best';
+  if (!qualityInput.value) qualityInput.value = 'best'; // unknown stored value
   clickModMods = (clickMod || 'ctrl+alt').split('+').filter(Boolean);
   clickButton = cb || 'left';
   shortcutEnabledInput.checked = (shortcutEnabled !== false); // default on

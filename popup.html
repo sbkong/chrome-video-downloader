@@ -119,6 +119,15 @@
       <label for="savePath" data-i18n="savePathLabel"></label>
       <input type="text" id="savePath" data-i18n-ph="savePathPlaceholder">
       <div class="hint" data-i18n-html="savePathHint"></div>
+      <label for="quality" data-i18n="qualityLabel"></label>
+      <select id="quality">
+        <option value="best" data-i18n="qualityBest"></option>
+        <option value="2160">4K</option>
+        <option value="1080">1080p</option>
+        <option value="720">720p</option>
+        <option value="480">480p</option>
+      </select>
+      <div class="hint" data-i18n="qualityHint" style="margin-top:-4px"></div>
       <label class="toggle"><input type="checkbox" id="shortcutEnabled"> <span data-i18n="shortcutEnabledLabel"></span></label>
       <div id="shortcutCapture" class="capture" tabindex="0"></div>
       <label class="toggle"><input type="checkbox" id="badgeEnabled"> <span data-i18n="badgeEnabledLabel"></span></label>
