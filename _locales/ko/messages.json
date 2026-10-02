@@ -11,7 +11,6 @@
   "shortcutLabel": {"message": "다운로드 단축키 (영상 클릭)"},
   "shortcutEnabledLabel": {"message": "다운로드 단축키 사용"},
   "qualityLabel": {"message": "화질"},
-  "qualityBest": {"message": "최고"},
   "qualityHint": {"message": "선택한 화질이 없으면 그보다 낮은 화질 중 가장 높은 것을 받습니다."},
   "badgeEnabledLabel": {"message": "영상 위 다운로드 버튼 표시 (마우스 오버)"},
   "shortcutCapturePlaceholder": {"message": "키 조합을 눌러주세요 (마우스 가능)"},

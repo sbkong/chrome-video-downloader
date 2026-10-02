@@ -11,7 +11,6 @@
   "shortcutLabel": {"message": "Download shortcut (click a video)"},
   "shortcutEnabledLabel": {"message": "Use download shortcut"},
   "qualityLabel": {"message": "Video quality"},
-  "qualityBest": {"message": "Best"},
   "qualityHint": {"message": "If the video has no stream at the chosen quality, the closest lower one is downloaded."},
   "badgeEnabledLabel": {"message": "Show download button on video (hover)"},
   "shortcutCapturePlaceholder": {"message": "Press a key combo (mouse ok)"},

@@ -320,8 +320,8 @@ shortcutEnabledInput.addEventListener('change', () => { renderShortcut(); persis
 
 chrome.storage.sync.get(['savePath', 'clickMod', 'clickButton', 'shortcutEnabled', 'badgeEnabled', 'useCookies', 'quality'], ({ savePath, clickMod, clickButton: cb, shortcutEnabled, badgeEnabled, useCookies, quality }) => {
   savePathInput.value = savePath || '';
-  qualityInput.value = quality || 'best';
-  if (!qualityInput.value) qualityInput.value = 'best'; // unknown stored value
+  qualityInput.value = quality || '4320';
+  if (!qualityInput.value) qualityInput.value = '4320'; // unknown or old 'best' value
   clickModMods = (clickMod || 'ctrl+alt').split('+').filter(Boolean);
   clickButton = cb || 'left';
   shortcutEnabledInput.checked = (shortcutEnabled !== false); // default on

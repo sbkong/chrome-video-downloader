@@ -271,7 +271,7 @@ function Invoke-Download($msg) {
   # only when nothing that small exists. The quality setting is whitelisted - it
   # ends up in a yt-dlp argument. --merge-output-format + --remux keep it mp4.
   $quality = [string]$msg.quality
-  $res = if ($quality -in @('2160', '1080', '720', '480')) { 'res:' + $quality } else { 'res' }
+  $res = if ($quality -in @('4320', '2160', '1080', '720', '480')) { 'res:' + $quality } else { 'res' }
   $ytArgs += @('-f', 'bv*+ba/b',
                '-S', ($res + ',vcodec:h264,ext:mp4:m4a'),
                '--merge-output-format', 'mp4',

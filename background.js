@@ -365,7 +365,7 @@ async function startDownload(url, referer, tabId, onDone) {
   });
 
   try {
-    port.postMessage({ url, savePath: savePath || '', referer: referer || '', cookiesText, format: 'best', quality: quality || 'best' });
+    port.postMessage({ url, savePath: savePath || '', referer: referer || '', cookiesText, format: 'best', quality: quality || '4320' });
   } catch (e) {
     S({ state: 'error', message: String(e) });
     flashBadge('ERR', '#c62828');
